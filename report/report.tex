@@ -6,7 +6,7 @@
 \graphicspath{{img/}}
 
 \title{\textbf{AITF Implementation Design Document}}
-\author{Nick Muesch, Nick Kalamvokis, Ted Meyer}
+\author{Craig Shue and Craig Shue}
 \date{}
 \begin{document}
 
@@ -142,6 +142,9 @@ through router I, at which point V determines if it should escalate.
 	\item There will be a threshold for determining whether an attack is a DOS
 	attack. This threshold will be kept in /etc/aitf.d/threshold.conf as a
 	number of requests per IP per minute.
+	\item We will use netfilter and iptables to intercept, modify and forward
+	packets.
+
 \end{enumerate}
 
 
