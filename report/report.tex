@@ -1,0 +1,81 @@
+\documentclass[11pt]{article}
+
+\usepackage{extramarks}
+\usepackage{listings}
+
+\title{\textbf{AITF Implementation Design Document}}
+\author{Nick Muesch, Nick Kalamvokis, Ted Meyer}
+\date{}
+\begin{document}
+
+\maketitle
+
+\section{Network Design}
+
+In Figure 1 H is an honest party participating in AITF, V is the victim, A is the attacker, and I is an internet backbone router. Ag, Hg, and Vg are the respective gateways for each of the Attacker, Honest party, and Victim. 
+ 
+In this scenario, we assume that all gateways and their clients are AITF enabled. While this would of course break backwards compatibility with the current architecture of the internet, we feel that it is outside the scope of the project to attempt a backwards compatible system. A more advanced description of the network protocol will be described later when discussing security and vulnerabilities of the AITF protocol.
+
+\newpage
+
+\section{Packet and Header Design}
+The core component of the AITF system is the shim layer that will be inserted between the IP header and the IP payload. In keeping with the style of RFC 791 for internet packet headers, the shim layer is specified as such:
+
+\texttt {
+	\lstinputlisting[basicstyle=\ttfamily\scriptsize]{ip_spec.txt}
+}
+
+Based on the statistics and calculations in the [original paper], we concluded that a minimum of six bytes are needed in order to maintain an uncrackable key. However, six is not a very nice number (read: not a power of two), so eight bytes were used instead. The shim layer is treated as a stack; each AITF enabled router that sees any type of packet will do four things: 
+\begin{enumerate}
+	\item The router will change the protocol ID in the original IP header to 254. This ID is reserved by RFC 791 for research use.
+	\item The router will increment the shim size field in the options buffer in the IP header
+	\item The router will write the IP address of its outgoing connection and the randomly generated number, which is keyed on the destination IP of the original IP header.
+	\item The router will write the remainder of the packet
+\end{enumerate}
+Clients such as V, H, and A will also strip the AITF shim layer by calculating its size from the options header. This information will have to be stored in a key-value pair structure, such that paths can be retrieved by source IP on request.
+
+
+\section{Network Communication Logic Design}
+A basic attack which AITF is designed to combat is a simple flooding attack, as shown in figure [2]. In this scenario, the attacker “A” sends a large amount of data to the victim “V”. The AITF enabled routers Ag and Vg have attached their respective headers to the AITF shim layer. As the policy controller, V decides that A is attacking him, and decides to issue a “please protect me”, or PPM packet to the first network in the shim stack, or Ag.  The victim determines if it is being attacked by keeping track of the number of packets it has received from each IP address per minute. If this number increases above a specified threshold, then this IP address is determined to be an attacker. After determining this, the victim sends out the PPM packet.  This packet resembles the AITF packet described above except for a few minor tweaks. The IP header protocol value will be 255, and AITF routers and routing devices will NOT change this to 254. This is the only exception to the rule described in section 2. There will also be no payload after the AITF shim. At each step along the path, the following will occur:
+\begin{enumerate}
+	\item The router will decrement the shim size field in the IP header options.
+	\item The router will read the first layer in the shim stack, and verify the IP address and random “public key” are correct for the given sender (in this example, V).
+	\item Assuming the router has verified the security information, it will write the remainder of the packet, which also happens to be the remainder of the shim stack, to the next device.
+	\item When a router identifies that it is the last router in the shim stack, it will ask the destination to stop attacking, and hopefully, it will.
+\end{enumerate}
+There are of course, numerous problems with this solution. For instance; the attacker may just ignore the request and keep flooding. In this scenario, the victim would use “escalation”. Another issue that may occur is spoofing. In this scenario; an attacker will spoof the path coming from an honest party to a victim, in the hopes that the victim will filter traffic from the innocent party. Both of these issues will be discussed later. 
+
+
+\section{Escalation}
+In the case that the attacker gateway or subsequent gateways do not comply, the request to block traffic will be escalated to gateways closer to the victim.  As the request gets escalated further and further, more traffic will be blocked.  Escalation is determined by an escalation policy implemented by the victim.  This policy ultimately chooses whether or not to escalate based on the benefit and cost of performing that escalation.  For this project, we will assume that escalation is always beneficial, and therefore escalation will always occur when an gateway does not comply.  This benefit comes from the assumption that most of the incoming traffic is from an attacker.  This will continue  up to the victim gateway and will ultimately disconnect the victim from the internet if no gateway complies with the filtering request.
+Initially the victim gateway will put a filter for the attacking path in its TCAM memory.  It will then ask the attacker gateway to temporarily filter traffic on the attacking path.  At this point, the filter in the victim gateway’s TCAM memory will be moved to shadow memory.  If the victim receives a single packet from the attacker after initially complaining, the victim will send a request (“whine”) to the victim gateway communicating that it’s still receiving undesired flow.  This “whine” packet should be different than the original blocking request. This packet will make the IP protocol header 255  If the victim gateway receives a “whine” packet, it checks shadow memory to confirm that it already tried to resolve the issue with the attacker gateway.  The victim gateway will communicate to the attacker gateway to filter traffic to the victim.
+
+\section{Spoofing Attacks and their Remediation}
+Suppose that in figure [1], the attacker is actually Ag and the attacker is spoofing packets from H. Ag does this by falsifying a shim stack layer from Hg, before sending the packet to I, which will then sign it and pass it along to Vg. Assuming this traffic is detected as a malicious and V decides to block it, It will route back through Ag and I, before Hg will identify the packet as being spoofed. This is where the random number becomes important; Hg can tell detect a mismatch in hash function output and determine that it is spoofed. If this is the case; It will notify V of an attempted spoofing attack coming through router I, at which point V determines if it should escalate.
+
+\section{Definitions}
+\begin{description}
+	\item[Shadow Memory] This is a slower form of memory than TCAM and is used to store information that does not need to be accessed in a timely manner
+	\item[TCAM Memory] Ternary content-addressable memory (TCAM) is a type of high-speed memory that searches it’s contents in one clock cycle (similar to cache memory)
+	\item[Attacking Path] The network path from the attacker to the victim
+	\item[AITF] Active Internet Traffic Filtering
+\end{description}
+
+\section{Implementation}
+\begin{enumerate}
+	\item We will use a systems language, most likely C
+	\item There will be a threshold for determining whether an attack is a DOS attack. This threshold will be kept in /etc/aitf.d/threshold.conf as a number of requests per IP per minute.
+\end{enumerate}
+
+
+
+
+\section{Assumptions}
+\begin{enumerate}
+	\item The victim and attacker are AITF enabled
+	\item All end hosts are AITF enabled
+	\item When a victim is being attacked, most incoming traffic is from an attacker. Therefore, escalation is always preferred over not escalating.
+	\item Not all middle routers must be AITF enabled; however if a middle router is not AITF enabled, escalation may not occur TO that device, just over it.
+\end{enumerate}
+
+\end{document}
