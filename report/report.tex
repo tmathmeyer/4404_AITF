@@ -2,6 +2,8 @@
 
 \usepackage{extramarks}
 \usepackage{listings}
+\usepackage{graphicx}
+\graphicspath{ {img/} }
 
 \title{\textbf{AITF Implementation Design Document}}
 \author{Nick Muesch, Nick Kalamvokis, Ted Meyer}
@@ -13,7 +15,11 @@
 \section{Network Design}
 
 In Figure 1 H is an honest party participating in AITF, V is the victim, A is the attacker, and I is an internet backbone router. Ag, Hg, and Vg are the respective gateways for each of the Attacker, Honest party, and Victim. 
- 
+\begin{figure}[h!]
+  \caption{non-trivial network design}
+  \centering
+    \includegraphics[width=0.5\textwidth]{network}
+\end{figure}
 In this scenario, we assume that all gateways and their clients are AITF enabled. While this would of course break backwards compatibility with the current architecture of the internet, we feel that it is outside the scope of the project to attempt a backwards compatible system. A more advanced description of the network protocol will be described later when discussing security and vulnerabilities of the AITF protocol.
 
 \newpage
@@ -36,14 +42,14 @@ Clients such as V, H, and A will also strip the AITF shim layer by calculating i
 
 
 \section{Network Communication Logic Design}
-A basic attack which AITF is designed to combat is a simple flooding attack, as shown in figure [2]. In this scenario, the attacker “A” sends a large amount of data to the victim “V”. The AITF enabled routers Ag and Vg have attached their respective headers to the AITF shim layer. As the policy controller, V decides that A is attacking him, and decides to issue a “please protect me”, or PPM packet to the first network in the shim stack, or Ag.  The victim determines if it is being attacked by keeping track of the number of packets it has received from each IP address per minute. If this number increases above a specified threshold, then this IP address is determined to be an attacker. After determining this, the victim sends out the PPM packet.  This packet resembles the AITF packet described above except for a few minor tweaks. The IP header protocol value will be 255, and AITF routers and routing devices will NOT change this to 254. This is the only exception to the rule described in section 2. There will also be no payload after the AITF shim. At each step along the path, the following will occur:
-\begin{enumerate}
-	\item The router will decrement the shim size field in the IP header options.
-	\item The router will read the first layer in the shim stack, and verify the IP address and random “public key” are correct for the given sender (in this example, V).
-	\item Assuming the router has verified the security information, it will write the remainder of the packet, which also happens to be the remainder of the shim stack, to the next device.
-	\item When a router identifies that it is the last router in the shim stack, it will ask the destination to stop attacking, and hopefully, it will.
-\end{enumerate}
-There are of course, numerous problems with this solution. For instance; the attacker may just ignore the request and keep flooding. In this scenario, the victim would use “escalation”. Another issue that may occur is spoofing. In this scenario; an attacker will spoof the path coming from an honest party to a victim, in the hopes that the victim will filter traffic from the innocent party. Both of these issues will be discussed later. 
+\begin{figure}[h!]
+  \caption{basic network design}
+  \centering
+    \includegraphics[width=0.5\textwidth]{basic}
+\end{figure}
+A basic attack which AITF is designed to combat is a simple flooding attack, as shown in figure [2]. In this scenario, the attacker “A” sends a large amount of data to the victim “V”. The AITF enabled routers Ag and Vg have attached their respective headers to the AITF shim layer. The victim determines if it is being attacked by keeping track of the number of packets it has received from each IP address per minute. If this number increases above a specified threshold, then this IP address is determined to be an attacker. 
+
+As the policy controller, V decides that A is attacking him, and decides to issue a “please protect me”, or PPM packet to the first network in the shim stack, or Ag. A threeway handshake between V, Ag, and Vg occurs to verify that the PPM packet is coming from the source it is claiming to protect. The victim will send a packet containing an IP payload of a 64 bit nonce, and with the protocol field set to 253. Ag will intercept this packet and can verify two things: that the nonce is correct, and that the shim layers match (recall that Vg caches shim stacks by source IP). In the case that the nonces don’t match, Vg will escalate. In the case that the nonces match, but the shim layers do not match, Vg will escalate directly to the first matching layer in the shim stack. If both match, Vg will reply with the second nonce in the reply from Ag and ask Ag to filter traffic from A to V. If Ag cooperates, it will install a filter for T-long seconds to filter traffic between A and V. If Ag does not cooperate, then V will repeat this process, signifying that it wants an escalation. Vg will then attempt to have the gateway of Ag block traffic. 
 
 
 \section{Escalation}
