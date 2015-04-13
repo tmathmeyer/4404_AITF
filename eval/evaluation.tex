@@ -1,0 +1,58 @@
+\documentclass[11pt]{article}
+
+\usepackage{extramarks}
+\usepackage{listings}
+\usepackage{graphicx}
+\graphicspath{{img/}}
+
+\title{\textbf{AITF Evaluation}}
+\author{Craig Shue and Craig Shue}
+\date{}
+\begin{document}
+
+\maketitle
+
+\section{Goals}
+
+	\subsection{Filter attack traffic within one second of becoming aware of attacker traffic}
+		\begin{enumerate}
+		\item{Recognizing bad traffic}
+		\item{Sending a PPM to the Victim Gateway}
+		\item{3-Way Handshake between the Victim Gateway and Attacker Gateway}
+		\item{Filter installed on Attacker Gateway}
+		\item{In case of Attacker ignoring request, Victim “whine”}
+		\item{Filtering request escalation}
+		\end{enumerate}
+	\subsection{Allow the Attacker to send spoofed traffic}
+	\subsection{Allow the Victim to correctly block spoofed traffic}
+	\subsection{Be able to trace and confirm contents of our shim layer}
+	\subsection{Have a victim-side configurable timeout for traffic}
+	\subsection{Allow the Victim to change settings based on a command line arguments}
+
+\newpage
+
+\section{Methodology}
+	\subsection{Latency = One second}
+	For measuring filtering latency, we intend to create a simple program for manually initiating a PPM. This program will measure the time between this packet being sent and the last packet from the attacker coming in. This can be accomplished fairly quickly in C, using libpcap and writing data to a raw socket. If successful, the timeout should be less than one second, and traffic from the Attacker will stop.
+	\subsection{Spoofing Traffic}
+	The attacker will have several suites of malicious software that it can use to either spam packets, or to spam packets while spoofing the source IP. This is also a simple C program involving a raw socket and some calls to send(). We should be able to specify any IP to send traffic from based on a command line argument. If successful, the attacker will be able to spoof 100 percent of malicious packets intended to be spoofed.
+	\subsection{Blocking Spoofed Traffic}
+	The victim will become aware of attacker traffic coming from a spoofed address.  If the victim attempts to block traffic from an honest party because the attacker was spoofing the IP address, the highest non-spoofed gateway will filter traffic from everyone except for the innocent spoofed party.  If done correctly, all traffic from the attacker will be filtered and the victim will be able to communicate with the spoofed innocent party.
+	\subsection{Packet Tracing and Debugging}
+	For tracing packets and debugging the code, we intend to use debug flags (C preprocessor) to enable/disable printing of shim layers, IP header info, and packet information. This will be included in the gateway/router side of the software. This will allow us to not only monitor and debug during the development of the system, but to redirect to file later for logging purposes. If successful we should be able to log any relevant information from each packet.
+	\subsection{Victim-Side Timeout}
+	The user can change the “timeout” setting using command line arguments. If no timeout is specified, one second will be the default timeout. After a filtering request, we will have the victim measure the time since sending the PPM. This will notify us to escalate the request if the timeout is reached. If successful, the victim will be able to detect a timeout from the supposedly malicious Attacker Gateway, and escalate the issue.
+
+
+\section{Security Goals}
+	\subsection{Authenticity}
+	We will be using the shim layer and generated keys to allow hosts to verify their identity. Authenticity is a core component of disallowing IP spoofing to cause a victim to blacklist an innocent party. Without authenticity, implementing AITF on a router would open the system for more vulnerabilities than it prevents.
+	\subsection{Integrity}
+	We verify integrity by using the hashed keys to allow the AITF enabled routers to verify authenticity. To maintain integrity, we detect packets that have been modified or maliciously forged by checking the hashed keys. When we detect these malicious forgeries, we escalate the filtering request until we reach a router with integrity. 
+	\subsection{Confidentiality}
+	There is no concern for confidentiality with AITF. An attacker does not gain anything of value by sniffing on AITF specific packets, and so we do not focus significantly on it.
+	\subsection{Availability}
+	We will make sure the victim is able to interact with AITF enabled gateways and filter traffic without losing all internet connectivity, unless the request must be escalated to the closest gateway. AITF is designed to prevent DDOS from making content available to our users.
+
+
+\end{document}
