@@ -12,8 +12,30 @@
 
 \maketitle
 
-\section{Network Design}
 
+\section{Assumptions}
+\begin{enumerate}
+	\item The victim and attacker are AITF enabled
+	\item All end hosts are AITF enabled
+	\item When a victim is being attacked, most incoming traffic is from an
+	attacker. Therefore, escalation is always preferred over not escalating.
+	\item Not all middle routers must be AITF enabled; however if a middle
+	router is not AITF enabled, escalation may not occur TO that device,
+	just over it.
+\end{enumerate}
+
+\section{Definitions}
+\begin{description}
+	\item[Shadow Memory] This is a slower form of memory than TCAM and is used
+	to store information that does not need to be accessed in a timely manner
+	\item[TCAM Memory] Ternary content-addressable memory (TCAM) is a type of
+	high-speed memory that searches it’s contents in one clock cycle
+	(similar to cache memory)
+	\item[Attacking Path] The network path from the attacker to the victim
+	\item[AITF] Active Internet Traffic Filtering
+\end{description}
+
+\section{Network Design}
 In Figure 1 H is an honest party participating in AITF, V is the victim, A is
 the attacker, and I is an internet backbone router. Ag, Hg, and Vg are the
 respective gateways for each of the Attacker, Honest party, and Victim. 
@@ -125,40 +147,34 @@ detect a mismatch in hash function output and determine that it is spoofed. If
 this is the case; It will notify V of an attempted spoofing attack coming
 through router I, at which point V determines if it should escalate.
 
-\section{Definitions}
-\begin{description}
-	\item[Shadow Memory] This is a slower form of memory than TCAM and is used
-	to store information that does not need to be accessed in a timely manner
-	\item[TCAM Memory] Ternary content-addressable memory (TCAM) is a type of
-	high-speed memory that searches it’s contents in one clock cycle
-	(similar to cache memory)
-	\item[Attacking Path] The network path from the attacker to the victim
-	\item[AITF] Active Internet Traffic Filtering
-\end{description}
 
 \section{Implementation}
 \begin{enumerate}
-	\item We will use a systems language, most likely C
+	\item We will use C and libpcap
 	\item There will be a threshold for determining whether an attack is a DOS
 	attack. This threshold will be kept in /etc/aitf.d/threshold.conf as a
 	number of requests per IP per minute.
 	\item We will use netfilter and iptables to intercept, modify and forward
 	packets.
-
 \end{enumerate}
 
+\section{Command Line Arguments}
+Below is a list of the command line arguments. The victim can change both the timeout and traffic threshold at which traffic starts to be blocked from an attacker. The timeout value is specified in seconds and the threshold is represented as the percentage of bandwidth that a given attacker is using. These listed arguments can be specified in any order.  \\
+-timeout/-t 1 \\
+-threshold/-s 80 \\
+-h help \\
+-v verbose \\
+-d debug \\
+
+
+Example: -t 1 -s 80
+
+This example configuration sets the timeout to one second and 80% bandwidth threshold.
 
 
 
-\section{Assumptions}
-\begin{enumerate}
-	\item The victim and attacker are AITF enabled
-	\item All end hosts are AITF enabled
-	\item When a victim is being attacked, most incoming traffic is from an
-	attacker. Therefore, escalation is always preferred over not escalating.
-	\item Not all middle routers must be AITF enabled; however if a middle
-	router is not AITF enabled, escalation may not occur TO that device,
-	just over it.
-\end{enumerate}
+
+
+
 
 \end{document}
