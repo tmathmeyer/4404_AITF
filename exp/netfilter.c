@@ -27,16 +27,51 @@ void print_tcp(unsigned char *data, uint16_t size) {
     }
 }
 
+void print_tcp_header(void *tcp) {
+    struct _header_ip *iph = (struct _header_ip *)tcp;
+    printf("IHL: %i\n", iph->IHL);
+    printf("LEN: %i\n", iph->total_length);
+    printf("CHK: %x\n", iph->checksum);
+    if (iph->IHL > 5) {
+        printf("SHM: %i\n", iph->shim_size_opt);
+    }
+}
+
+void print_ip(struct ip_addr ip) {
+    printf("%i.%i.%i.%i\n", ip.a, ip.b, ip.c, ip.d);
+}
+
+void print_shim_stack_layer(struct _shim_stack *shims, int size) {
+    while(size--) {
+        print_ip((shims+size)->shim_ip);
+        printf("SHM-RND: %lu\n", _hash(shims+size));
+    }
+}
+
 void print_shim(unsigned char *data) {
+    struct _tcp_payload payload = data_in(data);
+    print_tcp(payload.data, payload.size);
+    print_tcp_header(data);
+
+
+    data = insert_shim(data, paste, 1234);
+    data = insert_shim(data, paste, 5678);
+    
     struct _header_ip *ip_h = (struct _header_ip *)data;
     if (ip_h->IHL == 6) {
         int size = 0;
         struct _shim_stack *shims;
         data = strip_shim(data, &shims, &size);
+        
+        
+        puts("------------");
+        print_shim_stack_layer(shims, size);
+        puts("------------");
 
+
+        print_tcp_header(data);
         struct _tcp_payload payload = data_in(data);
         print_tcp(payload.data, payload.size);
-        printf("SHIMSIZE: %i\n", size);
     } else {
         puts("no shim layer");
     }
@@ -53,17 +88,18 @@ unsigned char *print_pkt (struct nfq_data *tb) {
         struct _header_ip *h = (struct _header_ip *)data;
         clean_packet(h);
 
-        if (ip_cmp(&paste, &(h->source))) {
+        if (ip_cmp(&paste, &(h->source)) && h->total_length>80 && h->total_length<200) {
             puts("===================");
-            printf("SRC = %i.%i.%i.%i\n", h->source.a, h->source.b, h->source.c, h->source.d);
-            printf("DST = %i.%i.%i.%i\n", h->dest.a, h->dest.b, h->dest.c, h->dest.d);
-            unsigned char *new_pkt = insert_shim(data, paste, 8675309); // packet with shim!
+            printf("SRC = ");
+            print_ip(h->source);
+            printf("DST = ");
+            print_ip(h->dest);
             
-            print_shim(new_pkt);
+            print_shim(data);
 
             puts("===================");
             fputc('\n', stdout);
-            return new_pkt;
+            return data;
         }
     }
 

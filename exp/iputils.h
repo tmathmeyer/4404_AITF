@@ -40,6 +40,9 @@ struct _tcp {
     uint16_t urgent_shit;
 };
 
+
+
+#define _hash(ssp) *((uint64_t *)(((uint32_t *)ssp)+1))
 struct _shim_stack {
     struct ip_addr shim_ip;
     uint32_t hash1;
