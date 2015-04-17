@@ -8,42 +8,77 @@
 
 #include "iputils.h"
 
-
+// the IP address of my paste server
 struct ip_addr paste = {.a=104, .b=236, .c=230, .d=23};
+
+int printable(char c) {
+    if (c >= 33 && c <= 126) {
+        return 1;
+    }
+
+    return 0;
+}
+
+void print_tcp(unsigned char *data, uint16_t size) {
+    while(size) {
+        putchar(*data);
+        data ++;
+        size --;
+    }
+}
+
+void print_shim(unsigned char *data) {
+    struct _header_ip *ip_h = (struct _header_ip *)data;
+    if (ip_h->IHL == 6) {
+        int size = 0;
+        struct _shim_stack *shims;
+        data = strip_shim(data, &shims, &size);
+
+        struct _tcp_payload payload = data_in(data);
+        print_tcp(payload.data, payload.size);
+        printf("SHIMSIZE: %i\n", size);
+    } else {
+        puts("no shim layer");
+    }
+}
 
 
 /* returns packet id */
-u_int32_t print_pkt (struct nfq_data *tb) {
-    int id = 0;
-    struct nfqnl_msg_packet_hdr *ph;
+unsigned char *print_pkt (struct nfq_data *tb) {
     int ret;
     unsigned char *data;
-
-    ph = nfq_get_msg_packet_hdr(tb);
-    if (ph) {
-        id = ntohl(ph->packet_id);
-    }
 
     ret = nfq_get_payload(tb, &data);
     if (ret >= 0) {
         struct _header_ip *h = (struct _header_ip *)data;
+        clean_packet(h);
 
-        if (ip_cmp(&paste, &(h->source)) || ip_cmp(&paste, &(h->dest))) {
-            printf("IP = %i.%i.%i.%i\n", h->source.a, h->source.b, h->source.c, h->source.d);
-            printf("IP = %i.%i.%i.%i\n", h->dest.a, h->dest.b, h->dest.c, h->dest.d);
+        if (ip_cmp(&paste, &(h->source))) {
+            puts("===================");
+            printf("SRC = %i.%i.%i.%i\n", h->source.a, h->source.b, h->source.c, h->source.d);
+            printf("DST = %i.%i.%i.%i\n", h->dest.a, h->dest.b, h->dest.c, h->dest.d);
+            unsigned char *new_pkt = insert_shim(data, paste, 8675309); // packet with shim!
+            
+            print_shim(new_pkt);
+
+            puts("===================");
             fputc('\n', stdout);
+            return new_pkt;
         }
     }
 
-    return id;
+    return NULL;
 }
 
 #define handle struct nfq_q_handle
 int cb(handle *qh, struct nfgenmsg *msg, struct nfq_data *nfa, void *data) {
     (void) msg; // specifically disable this
     (void) data;
-    u_int32_t id = print_pkt(nfa);
-    return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
+    struct nfqnl_msg_packet_hdr *ph = nfq_get_msg_packet_hdr(nfa);
+    int id = ph?ntohl(ph->packet_id):0;
+
+    unsigned char *new_pkt = print_pkt(nfa);
+    return nfq_set_verdict(qh, id, NF_ACCEPT, 0, new_pkt);
 }
 
 int main(int argc, char **argv) {
