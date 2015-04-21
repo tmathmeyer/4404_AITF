@@ -25,7 +25,7 @@ struct _header_ip {
     struct ip_addr source;
     struct ip_addr dest;
     uint32_t shim_size_opt;
-};
+} __attribute__ ((aligned (4)));
 
 struct _tcp {
     uint16_t source_port;

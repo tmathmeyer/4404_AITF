@@ -10,6 +10,9 @@
 
 // the IP address of my paste server
 struct ip_addr paste = {.a=104, .b=236, .c=230, .d=23};
+struct ip_addr googl = {.a=8, .b=8, .c=8, .d=8};
+struct ip_addr tests = {.a=7, .b=7, .c=7, .d=7};
+struct ip_addr local = {.a=192, .b=168, .c=1, .d=195};
 
 int printable(char c) {
     if (c >= 33 && c <= 126) {
@@ -54,8 +57,10 @@ void print_shim(unsigned char *data) {
     print_tcp_header(data);
 
 
-    data = insert_shim(data, paste, 1234);
-    data = insert_shim(data, paste, 5678);
+    data = insert_shim(data, paste, 2222);
+    data = insert_shim(data, googl, 3333);
+    data = insert_shim(data, local, 1234);
+    data = insert_shim(data, tests, 5678);
     
     struct _header_ip *ip_h = (struct _header_ip *)data;
     if (ip_h->IHL == 6) {

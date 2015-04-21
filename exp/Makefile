@@ -14,4 +14,4 @@ netfilter tint3_path:
 
 clean:
 	@echo cleaning
-	@rm -f netfilter *.o
+	@rm -vf netfilter *.o

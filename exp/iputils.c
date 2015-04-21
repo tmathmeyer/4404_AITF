@@ -34,11 +34,19 @@ struct _tcp_payload data_in(unsigned char *raw) {
     return payload;
 }
 
-unsigned char *insert_shim(unsigned char *orig, struct ip_addr addr, uint64_t rando) {
-    struct _shim_stack pushme;
-    pushme.shim_ip = addr;
-    *(uint64_t *)(&(pushme.hash1)) = rando;
+void print_shim2(unsigned char *shim) {
+    printf("+====+====+====+====+\n");
+    printf("|%u|%u|%u|%u|\n", shim[0], shim[1], shim[2], shim[3]);
+    printf("+====+====+====+====+\n");
+    printf("|0x%2x|0x%2x|0x%2x|0x%2x|\n", shim[4], shim[5], shim[6], shim[7]);
+    printf("+====+====+====+====+\n");
+    printf("|%x|%x|%x|%x|\n", shim[8], shim[9], shim[10], shim[11]);
+    printf("+====+====+====+====+\n");
+}
 
+
+
+unsigned char *insert_shim(unsigned char *orig, struct ip_addr addr, uint64_t rando) {
     struct _header_ip *ip = (struct _header_ip *)orig;
     uint8_t ip_header_size = ip->IHL * 4;
     unsigned char *new_pkt;
@@ -49,7 +57,7 @@ unsigned char *insert_shim(unsigned char *orig, struct ip_addr addr, uint64_t ra
         ip->total_length += sizeof(struct _shim_stack);
         memcpy(new_pkt, ip, sizeof(struct _header_ip)); // copy the pack in
     } else {
-        ip->IHL ++; // make the packet bigger
+        ip->IHL = 6; // make the packet bigger
         ip->shim_size_opt = 1; // make the shim size 1
         int size = ip->total_length + sizeof(struct _shim_stack) + 4;
         new_pkt = calloc(size, 1);
@@ -57,8 +65,12 @@ unsigned char *insert_shim(unsigned char *orig, struct ip_addr addr, uint64_t ra
         memcpy(new_pkt, ip, sizeof(struct _header_ip)); // write packet
     }
 
+
+    size_t hash_offset = sizeof(struct _header_ip) + 4;
     // write the shim layer
-    memcpy(new_pkt+sizeof(struct _header_ip), &pushme, sizeof(struct _shim_stack));
+    memcpy(new_pkt+sizeof(struct _header_ip), &addr, 4);
+    memcpy(new_pkt+hash_offset, &rando, sizeof(uint64_t));
+
 
     // insert the rest of the data
     memcpy(new_pkt+sizeof(struct _header_ip)+sizeof(struct _shim_stack),
