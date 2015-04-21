@@ -66,7 +66,7 @@ unsigned char *insert_shim(unsigned char *orig, struct ip_addr addr, uint64_t ra
     }
 
 
-    size_t hash_offset = sizeof(struct _header_ip) + 4;
+    size_t hash_offset = sizeof(struct _header_ip)+4;
     // write the shim layer
     memcpy(new_pkt+sizeof(struct _header_ip), &addr, 4);
     memcpy(new_pkt+hash_offset, &rando, sizeof(uint64_t));

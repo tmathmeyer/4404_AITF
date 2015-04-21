@@ -45,9 +45,9 @@ void print_ip(struct ip_addr ip) {
 }
 
 void print_shim_stack_layer(struct _shim_stack *shims, int size) {
-    while(size--) {
+    while(size --> 0) {
         print_ip((shims+size)->shim_ip);
-        printf("SHM-RND: %lu\n", _hash(shims+size));
+        printf("SHM-RND: %lu\n", *( (uint64_t *) (&(shims+size)->hash)));
     }
 }
 

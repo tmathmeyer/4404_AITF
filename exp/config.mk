@@ -4,7 +4,7 @@ VERSION = 1.0.0
 LIBS = -lnetfilter_queue
 
 # flags
-CFLAGS   = -std=c11 -pedantic-errors -Wextra -Wall ${CPPFLAGS} -O1
+CFLAGS   = -std=c11 -pedantic-errors -Wextra -Wall ${CPPFLAGS}
 LDFLAGS  = ${LIBS}
 
 # compiler and linker

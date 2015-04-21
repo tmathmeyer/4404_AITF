@@ -41,12 +41,10 @@ struct _tcp {
 };
 
 
-
-#define _hash(ssp) *((uint64_t *)(((uint32_t *)ssp)+1))
 struct _shim_stack {
     struct ip_addr shim_ip;
-    uint32_t hash1;
-    uint32_t hash2;
+    uint32_t hash;
+    uint32_t hash_extra;
 } __attribute__ ((aligned (4)));
 
 struct _tcp_payload {
