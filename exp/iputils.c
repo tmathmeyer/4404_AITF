@@ -34,37 +34,30 @@ struct _tcp_payload data_in(unsigned char *raw) {
     return payload;
 }
 
-void print_shim2(unsigned char *shim) {
-    printf("+====+====+====+====+\n");
-    printf("|%u|%u|%u|%u|\n", shim[0], shim[1], shim[2], shim[3]);
-    printf("+====+====+====+====+\n");
-    printf("|0x%2x|0x%2x|0x%2x|0x%2x|\n", shim[4], shim[5], shim[6], shim[7]);
-    printf("+====+====+====+====+\n");
-    printf("|%x|%x|%x|%x|\n", shim[8], shim[9], shim[10], shim[11]);
-    printf("+====+====+====+====+\n");
-}
 
 
-
-unsigned char *insert_shim(unsigned char *orig, struct ip_addr addr, uint64_t rando) {
+uchar *insert_shim(uchar *orig, struct ip_addr addr, uint64_t rando, uint32_t *size) {
     struct _header_ip *ip = (struct _header_ip *)orig;
     uint8_t ip_header_size = ip->IHL * 4;
     unsigned char *new_pkt;
 
     if (ip_header_size == 24) { // has an options field!
         ip->shim_size_opt++; // make the options size bigger
-        new_pkt = calloc(ip->total_length + sizeof(struct _shim_stack), 1); // make packet
+        new_pkt = calloc(ip->total_length + sizeof(struct _shim_stack), 1);
+        *size = ip->total_length + sizeof(struct _shim_stack);
         ip->total_length += sizeof(struct _shim_stack);
+        ip->protocol = AITF;
         memcpy(new_pkt, ip, sizeof(struct _header_ip)); // copy the pack in
     } else {
+        ip->original_protocol = ip->protocol;
         ip->IHL = 6; // make the packet bigger
         ip->shim_size_opt = 1; // make the shim size 1
-        int size = ip->total_length + sizeof(struct _shim_stack) + 4;
-        new_pkt = calloc(size, 1);
-        ip->total_length = size;
+        *size = ip->total_length+sizeof(struct _shim_stack)+OPTIONS_LAYER_SIZE;
+        new_pkt = calloc(*size, 1);
+        ip->total_length = *size;
+        ip->protocol = AITF;
         memcpy(new_pkt, ip, sizeof(struct _header_ip)); // write packet
     }
-
 
     size_t hash_offset = sizeof(struct _header_ip)+4;
     // write the shim layer
@@ -80,34 +73,56 @@ unsigned char *insert_shim(unsigned char *orig, struct ip_addr addr, uint64_t ra
     return new_pkt;
 }
 
-unsigned char *strip_shim(unsigned char *data, struct _shim_stack **location, int *sl) {
-    struct _header_ip *iph = (struct _header_ip *)data;
-    if (iph->IHL == 6) {
 
-        // save the shim stack
+uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8_t max) {
+    struct _header_ip *iph = (struct _header_ip *)data;
+    if (iph->IHL == PACKET_WITH_OPTIONS) {
+
+        // write the shim size back to the caller
         *sl = iph->shim_size_opt;
-        int shim_size = iph->shim_size_opt * sizeof(struct _shim_stack);
+
+        // if the caller wants fewer packets, do this for them
+        if (max && *sl > max) {
+            *sl = max;
+        } else {
+            // otherwise, also remove the options and store old protocol
+            iph->total_length -= OPTIONS_LAYER_SIZE;
+            iph->IHL = PACKET_SANS_OPTIONS;
+        }
+
+        // store the size in bytes of the shim
+        int shim_size = (*sl) * sizeof(struct _shim_stack);
+        // allocate space for shims
         *location = malloc(shim_size);
+        // save shime to buffer
         memcpy(*location, data+sizeof(struct _header_ip), shim_size);
+
 
         // start piecing together the old packet
         iph->total_length -= shim_size;
-        iph->total_length -= 4;
-        iph->IHL = 5;
+        
+        // allocate space for the new packet
         unsigned char *new_pkt = malloc(iph->total_length);
 
         // copy header back to new packet
-        int offsetval = sizeof(struct _header_ip)-4;
+        int offsetval = iph->IHL * 4;
         memcpy(new_pkt, iph, offsetval);
 
         //copy payload in
-        memcpy(new_pkt+offsetval, data+offsetval+4+shim_size, iph->total_length-offsetval);
-
+        memcpy(new_pkt+offsetval // write memory to here
+               ,data+sizeof(struct _header_ip)+shim_size // write memory from here
+               ,iph->total_length-offsetval); // write this much memory
+        
+        // if the packet is now void of shim shit
+        if (iph->IHL == PACKET_SANS_OPTIONS) {
+            ((struct _header_ip *)new_pkt) -> protocol = iph->original_protocol;
+        }
 
         recompute_checksum(new_pkt);
         return new_pkt;
     } else { // there was no shim layer!
         *location = NULL;
+        *sl = 0;
         return data;
     }
 }

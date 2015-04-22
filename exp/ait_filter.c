@@ -2,104 +2,79 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include <netinet/in.h>
 #include <linux/types.h>
 #include <linux/netfilter.h>
 #include <libnetfilter_queue/libnetfilter_queue.h>
-
 #include "iputils.h"
 
+bool validate(struct _header_ip *header, struct _shim_stack *shims) {
+    return false;
+}
 
-// the IP address of my paste server
-struct ip_addr paste = {.a=104, .b=236, .c=230, .d=23};
-struct ip_addr googl = {.a=8, .b=8, .c=8, .d=8};
-struct ip_addr tests = {.a=7, .b=7, .c=7, .d=7};
-struct ip_addr local = {.a=192, .b=168, .c=1, .d=195};
+struct ip_addr MSI = {.a=0, .b=0, .c=0, .d=0};
 
-int printable(char c) {
-    if (c >= 33 && c <= 126) {
-        return 1;
+
+/*
+ * 1  -> send the new packet in wb
+ * 0  -> send the old packet
+ * -1 -> send nothing at all
+ */
+int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
+    unsigned char *original;
+    struct _header_ip *ip;
+
+    if (nfq_get_payload(tb, &original) < 0) {
+        // no packet, return false
+        *size = 0;
+        *wb = NULL;
+        return false;
     }
 
-    return 0;
-}
+    ip = (struct _header_ip *)original;
 
-void print_tcp(unsigned char *data, uint16_t size) {
-    while(size) {
-        putchar(*data);
-        data ++;
-        size --;
-    }
-}
-
-void print_tcp_header(void *tcp) {
-    struct _header_ip *iph = (struct _header_ip *)tcp;
-    printf("CHK: %x\n", iph->checksum);
-}
-
-void print_ip(struct ip_addr ip) {
-    printf("%i.%i.%i.%i\n", ip.a, ip.b, ip.c, ip.d);
-}
-
-void print_shim_stack_layer(struct _shim_stack *shims, int size) {
-    while(size --> 0) {
-        print_ip((shims+size)->shim_ip);
-        printf("SHM-RND: %lu\n", *( (uint64_t *) (&(shims+size)->hash)));
-    }
-}
-
-void print_shim(unsigned char *data) {
-    print_tcp_header(data);
-    uint32_t bogus;
-
-    data = insert_shim(data, paste, 2222, &bogus);
-    data = insert_shim(data, tests, 5678, &bogus);
-    
-    struct _header_ip *ip_h = (struct _header_ip *)data;
-    if (ip_h->IHL == 6) {
-        uint8_t size = 0;
+#ifdef CORE_ROUTER
+    // if the protocol is PPM, validate the packet
+    // otherwise, pass it along with shim
+    if (ip->protocol == PPM) {
+        // remove top shim (should be for us) and validate it
         struct _shim_stack *shims;
-        data = strip_shim(data, &shims, &size, 0);
+        uint8_t shimc;
+        *wb = strip_shim(original, &shims, &shimc, 1);
         
-        
-        puts("------------");
-        print_shim_stack_layer(shims, size);
-        puts("------------");
-
-
-        print_tcp_header(data);
-    } else {
-        puts("no shim layer");
-    }
-}
-
-
-/* returns packet id */
-unsigned char *print_pkt (struct nfq_data *tb) {
-    int ret;
-    unsigned char *data;
-
-    ret = nfq_get_payload(tb, &data);
-    if (ret >= 0) {
-        struct _header_ip *h = (struct _header_ip *)data;
-        clean_packet(h);
-
-        if (ip_cmp(&paste, &(h->source)) && h->total_length>80 && h->total_length<200) {
-            puts("===================");
-            printf("SRC = ");
-            print_ip(h->source);
-            printf("DST = ");
-            print_ip(h->dest);
-            
-            print_shim(data);
-
-            puts("===================");
-            fputc('\n', stdout);
-            return data;
+        // there are no shims, or the shim is shit
+        if (shimc == 0 || !validate(ip, shims)) {
+            return false;
         }
-    }
 
-    return NULL;
+        // if this is the last chain in the line
+        if (ip->shim_size_opt == 0) {
+            // install filter
+            filter_throughput(ip);
+            return -1;
+        }
+ 
+        // keep going!
+        return true;
+#endif // CORE ROUTER
+#ifdef GATEWAY_ROUTER
+    if (ip->protocol == PPM) {
+        // negotiate handshake with other
+        // do things
+    } else if (ip->protocol == AITF) {
+        // if we get an AITF packet as a gateway router, strip it
+        struct _shim_stack *shims;
+        uint8_t shimc;
+
+        *wb = strip_shim(original, &shim_stack, &shimc, ALL_SHIMS);
+        return true;
+#endif // GATEWAY_ROUTER
+    } else {
+        //insert shim layer, pass along the packet
+        *wb = insert_shim(original, MSI, hash(ip), size);
+        return *wb != NULL;
+    }
 }
 
 #define handle struct nfq_q_handle
@@ -109,9 +84,13 @@ int cb(handle *qh, struct nfgenmsg *msg, struct nfq_data *nfa, void *data) {
     struct nfqnl_msg_packet_hdr *ph = nfq_get_msg_packet_hdr(nfa);
     int id = ph?ntohl(ph->packet_id):0;
 
-    unsigned char *new_pkt = print_pkt(nfa);
-
-    return nfq_set_verdict(qh, id, NF_ACCEPT, 0, new_pkt);
+    unsigned char *new_pkt;
+    uint32_t size;
+    if(monitor_packet(nfa, &new_pkt, &size)) {
+        return nfq_set_verdict(qh, id, NF_ACCEPT, size, new_pkt);
+    } else {
+        return nfw_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
+    }
 }
 
 

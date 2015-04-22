@@ -3,6 +3,12 @@
 #define _IP_UTILS_H_
 
 #include <stdint.h>
+#define PPM 255
+#define AITF 254
+#define PACKET_WITH_OPTIONS 6
+#define PACKET_SANS_OPTIONS 5
+#define OPTIONS_LAYER_SIZE 4
+#define uchar unsigned char
 
 struct ip_addr {
     uint8_t a;
@@ -20,11 +26,12 @@ struct _header_ip {
     uint8_t  flags : 4;
     uint16_t frag_offset : 12;
     uint8_t  ttl;
-    uint8_t  protocol_id;
+    uint8_t  protocol;
     uint16_t checksum;
     struct ip_addr source;
     struct ip_addr dest;
-    uint32_t shim_size_opt;
+    uint16_t shim_size_opt;
+    uint16_t original_protocol;
 } __attribute__ ((aligned (4)));
 
 struct _tcp {
@@ -40,7 +47,6 @@ struct _tcp {
     uint16_t urgent_shit;
 };
 
-
 struct _shim_stack {
     struct ip_addr shim_ip;
     uint32_t hash;
@@ -54,9 +60,9 @@ struct _tcp_payload {
 
 int ip_cmp(struct ip_addr *a, struct ip_addr *b);
 void clean_packet(struct _header_ip *h);
-struct _tcp_payload data_in(unsigned char *raw);
-unsigned char *insert_shim(unsigned char *orig, struct ip_addr addr, uint64_t rando);
-void recompute_checksum(unsigned char *data);
-unsigned char *strip_shim(unsigned char *data, struct _shim_stack **location, int *sl);
+struct _tcp_payload data_in(uchar *raw);
+uchar *insert_shim(uchar *orig, struct ip_addr addr, uint64_t rando, uint32_t *size);
+void recompute_checksum(uchar *data);
+uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8_t max);
 
 #endif
