@@ -17,7 +17,10 @@ int ip_cmp(struct ip_addr *a, struct ip_addr *b) {
 
 void clean_packet(struct _header_ip *h) {
     h->total_length = ntohs(h->total_length);
-    h->identification = ntohs(h->identification);
+}
+
+void fix_packet(struct _header_ip *h) {
+    h->total_length = htons(h->total_length);
 }
 
 struct _tcp_payload data_in(unsigned char *raw) {
@@ -38,6 +41,7 @@ struct _tcp_payload data_in(unsigned char *raw) {
 
 uchar *insert_shim(uchar *orig, struct ip_addr addr, uint64_t rando, uint32_t *size) {
     struct _header_ip *ip = (struct _header_ip *)orig;
+    clean_packet(ip);
     uint8_t ip_header_size = ip->IHL * 4;
     unsigned char *new_pkt;
 
@@ -69,6 +73,7 @@ uchar *insert_shim(uchar *orig, struct ip_addr addr, uint64_t rando, uint32_t *s
     memcpy(new_pkt+sizeof(struct _header_ip)+sizeof(struct _shim_stack),
             orig+ip_header_size, ip->total_length - ip_header_size);
 
+    fix_packet((struct _header_ip *)new_pkt);
     recompute_checksum(new_pkt);
     return new_pkt;
 }
@@ -76,6 +81,7 @@ uchar *insert_shim(uchar *orig, struct ip_addr addr, uint64_t rando, uint32_t *s
 
 uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8_t max) {
     struct _header_ip *iph = (struct _header_ip *)data;
+    clean_packet(iph);
     if (iph->IHL == PACKET_WITH_OPTIONS) {
 
         // write the shim size back to the caller
@@ -118,6 +124,7 @@ uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8
             ((struct _header_ip *)new_pkt) -> protocol = iph->original_protocol;
         }
 
+        fix_packet((struct _header_ip *)new_pkt);
         recompute_checksum(new_pkt);
         return new_pkt;
     } else { // there was no shim layer!
@@ -130,16 +137,46 @@ uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8
 void recompute_checksum(unsigned char *data) {
     struct _header_ip *ip_header = (struct _header_ip *)data;
     ip_header->checksum = 0;
-    uint32_t checksum_temp = 0xffff;
-    uint16_t *checkarr = (uint16_t *)data;
-    int indx=0, ctr=0;
-    while(ctr++ < (ip_header->IHL)*2) {
-        checksum_temp += ntohs(checkarr[indx++]);
-        if (checksum_temp>0xffff) {
-            checksum_temp-=0xffff;
-        }
+    uint16_t header_size = ip_header->IHL * 2;
+    uint16_t *header_shorts = (uint16_t *)data;
+    uint32_t sum = 0;
+    size_t counter = 0;
+    
+    for(; counter < header_size; counter++) {
+        sum += header_shorts[counter];
     }
-    checkarr = (uint16_t *)(&checksum_temp);
-    ip_header->checksum = htons(checkarr[0] + checkarr[1]);
+
+    while(sum > 0xffff) {
+        uint32_t carry = sum >> 16;
+        sum &= 0xffff;
+        sum += carry;
+    }
+    uint16_t checksum = sum;
+
+    ip_header->checksum = ~checksum;
+}
+
+void print_ip(struct ip_addr ip) {
+    printf("%i.%i.%i.%i\n", ip.a, ip.b, ip.c, ip.d);
+}
+
+void fancy_print_packet(struct _header_ip *ip) {
+    printf("IHL: %i\n", ip->IHL);
+    printf("VER: %i\n", ip->version);
+    printf("TYP: %i\n", ip->serv_type);
+    printf("LEN: %i\n", ip->total_length);
+    printf("IDT: %i\n", ip->identification);
+    printf("FLG: %i\n", ip->flags);
+    printf("FRG: %x\n", ip->frag_offset);
+    printf("TTL: %i\n", ip->ttl);
+    printf("PRO: %i\n", ip->protocol);
+    printf("CHK: %i\n", ip->checksum);
+    printf("SRC: ");print_ip(ip->source);
+    printf("DST: ");print_ip(ip->dest);
+    
+    if (ip->IHL > 5) {
+        printf("SSO: %i\n", ip->shim_size_opt);
+        printf("OPR: %i\n", ip->original_protocol);
+    }
 }
 

@@ -37,9 +37,6 @@ void print_tcp_header(void *tcp) {
     printf("CHK: %x\n", iph->checksum);
 }
 
-void print_ip(struct ip_addr ip) {
-    printf("%i.%i.%i.%i\n", ip.a, ip.b, ip.c, ip.d);
-}
 
 void print_shim_stack_layer(struct _shim_stack *shims, int size) {
     while(size --> 0) {
@@ -49,28 +46,23 @@ void print_shim_stack_layer(struct _shim_stack *shims, int size) {
 }
 
 void print_shim(unsigned char *data) {
-    print_tcp_header(data);
+    struct _header_ip *ip_h = (struct _header_ip *)data;
+    fancy_print_packet(ip_h);
+    
+    
     uint32_t bogus;
 
     data = insert_shim(data, paste, 2222, &bogus);
     data = insert_shim(data, tests, 5678, &bogus);
     
-    struct _header_ip *ip_h = (struct _header_ip *)data;
-    if (ip_h->IHL == 6) {
-        uint8_t size = 0;
-        struct _shim_stack *shims;
-        data = strip_shim(data, &shims, &size, 0);
-        
-        
-        puts("------------");
-        print_shim_stack_layer(shims, size);
-        puts("------------");
-
-
-        print_tcp_header(data);
-    } else {
-        puts("no shim layer");
-    }
+    uint8_t size = 0;
+    struct _shim_stack *shims;
+    data = strip_shim(data, &shims, &size, 0);
+    
+    
+    ip_h = (struct _header_ip *)data;
+    puts("----------------------");
+    fancy_print_packet(ip_h);
 }
 
 
@@ -82,14 +74,12 @@ unsigned char *print_pkt (struct nfq_data *tb) {
     ret = nfq_get_payload(tb, &data);
     if (ret >= 0) {
         struct _header_ip *h = (struct _header_ip *)data;
-        clean_packet(h);
+        uint16_t htl = h->total_length;
+        htl = ntohs(htl);
 
-        if (ip_cmp(&paste, &(h->source)) && h->total_length>80 && h->total_length<200) {
+
+        if (ip_cmp(&paste, &(h->source)) && htl>80 && htl<200) {
             puts("===================");
-            printf("SRC = ");
-            print_ip(h->source);
-            printf("DST = ");
-            print_ip(h->dest);
             
             print_shim(data);
 

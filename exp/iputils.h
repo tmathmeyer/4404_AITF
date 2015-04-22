@@ -64,5 +64,8 @@ struct _tcp_payload data_in(uchar *raw);
 uchar *insert_shim(uchar *orig, struct ip_addr addr, uint64_t rando, uint32_t *size);
 void recompute_checksum(uchar *data);
 uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8_t max);
+void fancy_print_packet(struct _header_ip *ip);
+void print_ip(struct ip_addr ip);
+void fix_packet(struct _header_ip *h);
 
 #endif
