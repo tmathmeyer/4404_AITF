@@ -24,15 +24,8 @@ void printHelp(void)
 	exit(0);
 }
 
-void getHashData(uint64_t *salt, uint64_t *ip)
-{
-	
-	
-	
-}
-
 /*
-	* Function to calculate MD5 hash for salt and IP
+* Function to calculate MD5 hash for salt and IP
 */
 void calcMD5(uint64_t *hash, uint64_t *salt, uint64_t *ip)
 {
@@ -48,7 +41,6 @@ void calcMD5(uint64_t *hash, uint64_t *salt, uint64_t *ip)
 		printf("Hash: %llu\n", *hash);
 	}
 }
-
 
 
 int main (int argc, char **argv)
@@ -108,9 +100,6 @@ int main (int argc, char **argv)
 	
 	uint64_t ip;
 	uint64_t salt;
-	
-	getHashData(&salt, &ip);
-	
 	uint64_t hash;
     calcMD5(&hash, &salt, &ip);
 }
