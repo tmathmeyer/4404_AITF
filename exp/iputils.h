@@ -3,8 +3,9 @@
 #define _IP_UTILS_H_
 
 #include <stdint.h>
-#define PPM 255
-#define AITF 254
+#define PPM 254
+#define AITF 253
+#define FILTER 252
 #define PACKET_WITH_OPTIONS 6
 #define PACKET_SANS_OPTIONS 5
 #define OPTIONS_LAYER_SIZE 4
