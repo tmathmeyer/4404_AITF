@@ -16,6 +16,7 @@ bool validate(struct _header_ip *header, struct _shim_stack *shims) {
 uint64_t hash(struct _header_ip *header) {
     uint64_t result;
     calcMD5(&result, 42, (uint64_t *)(header->source));
+    return result;
 }
 
 struct ip_addr MSI = {.a=0, .b=0, .c=0, .d=0};
