@@ -64,10 +64,12 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
     }
 #endif // CORE ROUTER
 #ifdef GATEWAY_ROUTER
-    if (ip->protocol == PPM) {
+    if (ip->protocol == FILTER) {
         // negotiate handshake with other
         // do things
-    } else if (ip->protocol == AITF) {
+    } else if(ip->protocol == PPM) {
+		//if we get a PPM packet from an attacker, we need to filter!!
+	} else if (ip->protocol == AITF) {
         // if we get an AITF packet as a gateway router, strip it
         struct _shim_stack *shims;
         uint8_t shimc;

@@ -24,7 +24,7 @@ void printHelp(void)
 	exit(0);
 }
 
-
+//Gets the destination IP from the shim of the current packet
 void getHashData(uint64_t *salt, uint64_t *ip)
 {
 	
