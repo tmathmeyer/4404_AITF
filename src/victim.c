@@ -36,7 +36,10 @@ void calcMD5(uint64_t *hash, uint64_t *salt, uint64_t *ip)
 	MD5(input, 16, temp_result);
 	*hash = *((uint64_t *) temp_result) ^ *((uint64_t *)(temp_result+8));
 
-    printf("%x\n", *hash);
+	if(dFlag)
+	{
+		printf("Hash: %llu\n", *hash);
+	}
 }
 
 
