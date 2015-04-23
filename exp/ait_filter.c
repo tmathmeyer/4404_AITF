@@ -10,7 +10,9 @@
 #include "iputils.h"
 
 bool validate(struct _header_ip *header, struct _shim_stack *shims) {
-    return false;
+	uint64_t currentHash; 
+	currentHash = *((uint64_t *)&(shims->hash));
+    return currentHash == hash(header);
 }
 
 uint64_t hash(struct _header_ip *header) {
