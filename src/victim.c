@@ -24,22 +24,8 @@ void printHelp(void)
 	exit(0);
 }
 
-//Gets the destination IP from the shim of the current packet
-//Takes in a uchar packet and returns the destination address
-uchar getDestAddress(uint_t  {
-
-
-}
-
-void getHashData(uint64_t *salt, uint64_t *ip)
-{
-	
-	
-	
-}
-
 /*
-	* Function to calculate MD5 hash for salt and IP
+* Function to calculate MD5 hash for salt and IP
 */
 void calcMD5(uint64_t *hash, uint64_t *salt, uint64_t *ip)
 {
@@ -55,7 +41,6 @@ void calcMD5(uint64_t *hash, uint64_t *salt, uint64_t *ip)
 		printf("Hash: %llu\n", *hash);
 	}
 }
-
 
 
 int main (int argc, char **argv)
