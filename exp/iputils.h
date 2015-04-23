@@ -67,5 +67,6 @@ uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8
 void fancy_print_packet(struct _header_ip *ip);
 void print_ip(struct ip_addr ip);
 void fix_packet(struct _header_ip *h);
+void pretty_print_packet(struct _header_ip *ip);
 
 #endif

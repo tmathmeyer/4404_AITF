@@ -156,8 +156,50 @@ void recompute_checksum(unsigned char *data) {
     ip_header->checksum = ~checksum;
 }
 
+
+
+
+
+
+
+
+
+
+// printing utilities
+int ip_len(struct ip_addr ip) {
+    int ct = 7;
+    if (ip.a > 100) ct++;
+    if (ip.b > 100) ct++;
+    if (ip.c > 100) ct++;
+    if (ip.d > 100) ct++;
+    
+    if (ip.a > 10) ct++;
+    if (ip.b > 10) ct++;
+    if (ip.c > 10) ct++;
+    if (ip.d > 10) ct++;
+
+    return ct;
+}
+
+void pretty_print_packet(struct _header_ip *ip) {
+    int srclen = 31 - (ip_len(ip->source) + 4),
+        destlen = 31 - (ip_len(ip->dest) + 5);
+    
+    printf("╔═══╤═══╤═══════╤═══════════════╗\n");
+    printf("║%3i│%3i│%7i│%15i║\n", ip->version, ip->IHL, ip->serv_type, ip->total_length);
+    printf("╟───┴───┴───────┼───────────────╢\n");
+    printf("║%15i│%15i║\n", ip->identification, ip->flags);
+    printf("╟───────┬───────┼───────────────╢\n");
+    printf("║%7i│%7i│%15i║\n", ip->ttl, ip->protocol, ip->checksum);
+    printf("╟───────┴───────┴───────────────╢\n");
+    printf("║%*cSRC:", srclen/2, ' '); print_ip(ip->source); printf("%*c║\n", srclen-(srclen/2),' ');
+    printf("╟───────────────────────────────╢\n");
+    printf("║%*cDEST:", destlen/2, ' '); print_ip(ip->dest); printf("%*c║\n", destlen-(destlen/2),' ');
+    printf("╚═══════════════════════════════╝\n");
+}
+
 void print_ip(struct ip_addr ip) {
-    printf("%i.%i.%i.%i\n", ip.a, ip.b, ip.c, ip.d);
+    printf("%i.%i.%i.%i", ip.a, ip.b, ip.c, ip.d);
 }
 
 void fancy_print_packet(struct _header_ip *ip) {
@@ -171,8 +213,8 @@ void fancy_print_packet(struct _header_ip *ip) {
     printf("TTL: %i\n", ip->ttl);
     printf("PRO: %i\n", ip->protocol);
     printf("CHK: %i\n", ip->checksum);
-    printf("SRC: ");print_ip(ip->source);
-    printf("DST: ");print_ip(ip->dest);
+    printf("SRC: ");print_ip(ip->source);puts("");
+    printf("DST: ");print_ip(ip->dest);puts("");
     
     if (ip->IHL > 5) {
         printf("SSO: %i\n", ip->shim_size_opt);

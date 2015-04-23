@@ -13,6 +13,10 @@ bool validate(struct _header_ip *header, struct _shim_stack *shims) {
     return false;
 }
 
+uint64_t hash(struct _header_ip *header) {
+    return 42;
+}
+
 struct ip_addr MSI = {.a=0, .b=0, .c=0, .d=0};
 
 
@@ -42,7 +46,7 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
         struct _shim_stack *shims;
         uint8_t shimc;
         *wb = strip_shim(original, &shims, &shimc, 1);
-        
+
         // there are no shims, or the shim is shit
         if (shimc == 0 || !validate(ip, shims)) {
             return false;
@@ -57,6 +61,7 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
  
         // keep going!
         return true;
+    }
 #endif // CORE ROUTER
 #ifdef GATEWAY_ROUTER
     if (ip->protocol == PPM) {
@@ -69,8 +74,9 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
 
         *wb = strip_shim(original, &shim_stack, &shimc, ALL_SHIMS);
         return true;
+    }
 #endif // GATEWAY_ROUTER
-    } else {
+    else {
         //insert shim layer, pass along the packet
         *wb = insert_shim(original, MSI, hash(ip), size);
         return *wb != NULL;
@@ -89,7 +95,7 @@ int cb(handle *qh, struct nfgenmsg *msg, struct nfq_data *nfa, void *data) {
     if(monitor_packet(nfa, &new_pkt, &size)) {
         return nfq_set_verdict(qh, id, NF_ACCEPT, size, new_pkt);
     } else {
-        return nfw_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
+        return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
     }
 }
 
