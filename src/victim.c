@@ -100,9 +100,6 @@ int main (int argc, char **argv)
 	
 	uint64_t ip;
 	uint64_t salt;
-	
-	getHashData(&salt, &ip);
-	
 	uint64_t hash;
     calcMD5(&hash, &salt, &ip);
 }
