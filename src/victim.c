@@ -29,19 +29,14 @@ void printHelp(void)
 */
 void calcMD5(uint64_t *hash, uint64_t *salt, uint64_t *ip)
 {
-	char *input = strcat((char *)salt, (char *)ip);
-	printf("Input: %c", input);
-	unsigned char tempHash1[MD5_FINAL_LENGTH];
-	unsigned char tempHash2[MD5_FINAL_LENGTH];	
-	unsigned char *tempResult;
-	MD5(input, strlen(input), tempResult);
-	printf("Temp Result: %c", tempResult);
-	strncpy(tempHash1, tempResult, MD5_FINAL_LENGTH);
-	strncpy(tempHash2, (tempResult +  MD5_FINAL_LENGTH), MD5_FINAL_LENGTH);
-	printf("Temp Hash1: %c", tempHash1);
-	printf("Temp Hash2: %c", tempHash2);
-	*hash = *((uint64_t *) tempHash1) ^ *((uint64_t *)tempHash2);
-	printf("Final Hash: %c", hash);
+    unsigned char input[16];
+    unsigned char temp_result[16];
+    *((uint64_t *)input) = *salt;
+    *((uint64_t *)(input+8)) = *hash;
+	MD5(input, 16, temp_result);
+	*hash = *((uint64_t *) temp_result) ^ *((uint64_t *)(temp_result+8));
+
+    printf("%x\n", *hash);
 }
 
 
@@ -104,5 +99,5 @@ int main (int argc, char **argv)
 	uint64_t ip = 1024;
 	uint64_t salt = 902748;
 	uint64_t hash;
-	calcMD5(&hash, &salt, &ip);
+    calcMD5(&hash, &salt, &ip);
 }
