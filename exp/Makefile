@@ -2,7 +2,7 @@ include config.mk
 
 all: netfilter
 
-netfilter: netfilter.o iputils.o
+netfilter: ait_filter.o iputils.o
 
 .c.o: config.mk
 	@echo CC -c $<

@@ -6,6 +6,7 @@
 #define PPM 254
 #define AITF 253
 #define FILTER 252
+#define ALL_SHIMS 0
 #define PACKET_WITH_OPTIONS 6
 #define PACKET_SANS_OPTIONS 5
 #define OPTIONS_LAYER_SIZE 4

@@ -7,17 +7,39 @@
 #include <linux/types.h>
 #include <linux/netfilter.h>
 #include <libnetfilter_queue/libnetfilter_queue.h>
+#include <openssl/md5.h>
 #include "iputils.h"
 
-bool validate(struct _header_ip *header, struct _shim_stack *shims) {
-    return false;
+bool debug_flag = 1;
+
+void calcMD5(uint64_t *hash, uint64_t *salt, uint64_t *ip)
+{
+    unsigned char input[16];
+    unsigned char temp_result[16];
+    *((uint64_t *)input) = *salt;
+    *((uint64_t *)(input+8)) = *ip;
+    MD5(input, 16, temp_result);
+    *hash = *((uint64_t *) temp_result) ^ *((uint64_t *)(temp_result+8));
+
+    if(debug_flag)
+    {
+        printf("Hash: %lu\n", *hash);
+    }
 }
 
 uint64_t hash(struct _header_ip *header) {
     uint64_t result;
-    calcMD5(&result, 42, (uint64_t *)(header->source));
+    uint64_t salt = 42;
+    calcMD5(&result, &salt, (uint64_t *)(&(header->source)));
     return result;
 }
+
+bool validate(struct _header_ip *header, struct _shim_stack *shims) {
+    uint64_t currentHash; 
+    currentHash = *((uint64_t *)&(shims->hash));
+    return currentHash == hash(header);
+}
+
 
 struct ip_addr MSI = {.a=0, .b=0, .c=0, .d=0};
 
@@ -60,7 +82,7 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
             filter_throughput(ip);
             return -1;
         }
- 
+
         // keep going!
         return true;
     }
@@ -70,21 +92,19 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
         // negotiate handshake with other
         // do things
     } else if(ip->protocol == PPM) {
-		//if we get a PPM packet from an attacker, we need to filter!!
-	} else if (ip->protocol == AITF) {
+        //if we get a PPM packet from an attacker, we need to filter!!
+    } else if (ip->protocol == AITF) {
         // if we get an AITF packet as a gateway router, strip it
         struct _shim_stack *shims;
         uint8_t shimc;
 
-        *wb = strip_shim(original, &shim_stack, &shimc, ALL_SHIMS);
+        *wb = strip_shim(original, &shims, &shimc, ALL_SHIMS);
         return true;
     }
 #endif // GATEWAY_ROUTER
-    else {
         //insert shim layer, pass along the packet
         *wb = insert_shim(original, MSI, hash(ip), size);
         return *wb != NULL;
-    }
 }
 
 #define handle struct nfq_q_handle
@@ -186,7 +206,7 @@ int main(int argc, char **argv) {
     fd = nfq_fd(h);
 
     while ((rv = recv(fd, buf, sizeof(buf), 0)) && rv >= 0) {
-            nfq_handle_packet(h, buf, rv);
+        nfq_handle_packet(h, buf, rv);
     }
 
     printf("unbinding from queue 0\n");
