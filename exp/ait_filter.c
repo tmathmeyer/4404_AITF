@@ -15,10 +15,8 @@ bool debug_flag = 1;
 
 void blockIP(struct ip_addr *ip)
 {
-	char *ipAddr;
-	sprintf(ipAddr, "%d.%d.%d.%d", ip->a, ip->b, ip->c, ip->d);
 	char buff[100] = {0};
-	sprintf(buff, "iptables -A INPUT -s %s -j DROP", ipAddr);
+	sprintf(buff, "iptables -A INPUT -s %d.%d.%d.%d -j DROP", ip->a, ip->b, ip->c, ip->d);
 	system(buff);
 	printf("Testing 123... : %s\n", ipAddr);
 }
@@ -145,97 +143,97 @@ int cb(handle *qh, struct nfgenmsg *msg, struct nfq_data *nfa, void *data) {
 
 
 void usage() {
-    puts("netfilter [-v level]");
-    puts("    -v level");
-    puts("          level = [light, rambling, annoying, obnoxious]");
+puts("netfilter [-v level]");
+puts("    -v level");
+puts("          level = [light, rambling, annoying, obnoxious]");
 }
 
 
 int debug_level = 0;
 int main(int argc, char **argv) {
-	
-	
-	// testing alhpa 123
-	struct ip_addr jamona = {.a = 192, .b = 168, .c = 5, .d = 10};
-	blockIP(&jamona);
-	
-	
-	//end of Test-E
-	
-	
-    int ctr = 0;
-    while(++ctr < argc) {
-        if (!(strncmp(argv[ctr], "-v", 2) && strncmp(argv[ctr], "--verbose", 8))) {
-            if (ctr >= argc-1) {
-                usage();
-                exit(0);
-				} else {
-                ctr++;
-                if (!strncmp(argv[ctr], "light", 5)) {
-                    debug_level = 1;
-					} else if (!strncmp(argv[ctr], "rambling", 8)) {
-                    debug_level = 2;
-					} else if (!strncmp(argv[ctr], "annoying", 8)) {
-                    debug_level = 3;
-					} else if (!strncmp(argv[ctr], "obnoxious", 9)) {
-                    debug_level = 4;
-				}
-			}
-		}
-	}
-	
-	
-	
-	
-    struct nfq_handle *h;
-    struct nfq_q_handle *qh;
-    int fd;
-    int rv;
-    char buf[4096] __attribute__ ((aligned));
-	
-    printf("opening library handle\n");
-    h = nfq_open();
-    if (!h) {
-        fprintf(stderr, "error during nfq_open()\n");
-        exit(1);
-	}
-	
-    printf("unbinding existing nf_queue handler for AF_INET (if any)\n");
-    if (nfq_unbind_pf(h, AF_INET) < 0) {
-        fprintf(stderr, "error during nfq_unbind_pf()\n");
-        exit(1);
-	}
-	
-    printf("binding nfnetlink_queue as nf_queue handler for AF_INET\n");
-    if (nfq_bind_pf(h, AF_INET) < 0) {
-        fprintf(stderr, "error during nfq_bind_pf()\n");
-        exit(1);
-	}
-	
-    printf("binding this socket to queue '0'\n");
-    qh = nfq_create_queue(h,  0, &cb, NULL);
-    if (!qh) {
-        fprintf(stderr, "error during nfq_create_queue()\n");
-        exit(1);
-	}
-	
-    printf("setting copy_packet mode\n");
-    if (nfq_set_mode(qh, NFQNL_COPY_PACKET, 0xffff) < 0) {
-        fprintf(stderr, "can't set packet_copy mode\n");
-        exit(1);
-	}
-	
-    fd = nfq_fd(h);
-	
-    while ((rv = recv(fd, buf, sizeof(buf), 0)) && rv >= 0) {
-        nfq_handle_packet(h, buf, rv);
-	}
-	
-    printf("unbinding from queue 0\n");
-    nfq_destroy_queue(qh);
-	
-    printf("closing library handle\n");
-    nfq_close(h);
-	
-    exit(0);
+
+
+// testing alhpa 123
+struct ip_addr jamona = {.a = 192, .b = 168, .c = 5, .d = 10};
+blockIP(&jamona);
+
+
+//end of Test-E
+
+
+int ctr = 0;
+while(++ctr < argc) {
+if (!(strncmp(argv[ctr], "-v", 2) && strncmp(argv[ctr], "--verbose", 8))) {
+if (ctr >= argc-1) {
+usage();
+exit(0);
+} else {
+ctr++;
+if (!strncmp(argv[ctr], "light", 5)) {
+debug_level = 1;
+} else if (!strncmp(argv[ctr], "rambling", 8)) {
+debug_level = 2;
+} else if (!strncmp(argv[ctr], "annoying", 8)) {
+debug_level = 3;
+} else if (!strncmp(argv[ctr], "obnoxious", 9)) {
+debug_level = 4;
+}
+}
+}
+}
+
+
+
+
+struct nfq_handle *h;
+struct nfq_q_handle *qh;
+int fd;
+int rv;
+char buf[4096] __attribute__ ((aligned));
+
+printf("opening library handle\n");
+h = nfq_open();
+if (!h) {
+fprintf(stderr, "error during nfq_open()\n");
+exit(1);
+}
+
+printf("unbinding existing nf_queue handler for AF_INET (if any)\n");
+if (nfq_unbind_pf(h, AF_INET) < 0) {
+fprintf(stderr, "error during nfq_unbind_pf()\n");
+exit(1);
+}
+
+printf("binding nfnetlink_queue as nf_queue handler for AF_INET\n");
+if (nfq_bind_pf(h, AF_INET) < 0) {
+fprintf(stderr, "error during nfq_bind_pf()\n");
+exit(1);
+}
+
+printf("binding this socket to queue '0'\n");
+qh = nfq_create_queue(h,  0, &cb, NULL);
+if (!qh) {
+fprintf(stderr, "error during nfq_create_queue()\n");
+exit(1);
+}
+
+printf("setting copy_packet mode\n");
+if (nfq_set_mode(qh, NFQNL_COPY_PACKET, 0xffff) < 0) {
+fprintf(stderr, "can't set packet_copy mode\n");
+exit(1);
+}
+
+fd = nfq_fd(h);
+
+while ((rv = recv(fd, buf, sizeof(buf), 0)) && rv >= 0) {
+nfq_handle_packet(h, buf, rv);
+}
+
+printf("unbinding from queue 0\n");
+nfq_destroy_queue(qh);
+
+printf("closing library handle\n");
+nfq_close(h);
+
+exit(0);
 }
