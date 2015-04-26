@@ -27,6 +27,7 @@ void calcMD5(uint64_t *hash, uint64_t *salt, uint64_t *ip)
     }
 }
 
+//Calculates the hash using the MD% hashing function
 uint64_t hash(struct _header_ip *header) {
     uint64_t result;
     uint64_t salt = 42;
