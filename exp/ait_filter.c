@@ -9,12 +9,14 @@
 #include <libnetfilter_queue/libnetfilter_queue.h>
 #include "iputils.h"
 
+//Checks the current packets hash with the actual hash of this gateway
 bool validate(struct _header_ip *header, struct _shim_stack *shims) {
 	uint64_t currentHash; 
 	currentHash = *((uint64_t *)&(shims->hash));
     return currentHash == hash(header);
 }
 
+//Calculates the hash using the MD% hashing function
 uint64_t hash(struct _header_ip *header) {
     uint64_t result;
     calcMD5(&result, 42, (uint64_t *)(header->source));
