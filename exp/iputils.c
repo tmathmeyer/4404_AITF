@@ -26,7 +26,7 @@ void fix_packet(struct _header_ip *h) {
 struct _tcp_payload data_in(unsigned char *raw) {
     struct _header_ip *h = (struct _header_ip *)raw;
     uint8_t ip_header_size = h->IHL * 4;
-    uint32_t ip_payload_size = h->total_length - ip_header_size;
+    uint32_t ip_payload_size = htons(h->total_length) - ip_header_size;
     raw += ip_header_size; // remove IP Header
     struct _tcp *tcp = (struct _tcp *)raw; // should check if tcp or udp later
 
@@ -38,12 +38,29 @@ struct _tcp_payload data_in(unsigned char *raw) {
 }
 
 
+void print_bytes(struct _header_ip *header) {
+    uint32_t bytec = htons(header->total_length);
+    uint32_t i = 0;
+    unsigned char *bytes = (unsigned char *)header;
+    while (i < bytec) {
+        printf("%02X ",bytes[i]);
+        i++;
+        if (i%16 == 0) {
+            printf("\n");
+        }
+    }
+
+    printf("\n");
+}
+
+
 
 uchar *insert_shim(uchar *orig, struct ip_addr addr, uint64_t rando, uint32_t *size) {
     struct _header_ip *ip = (struct _header_ip *)orig;
     clean_packet(ip);
     uint8_t ip_header_size = ip->IHL * 4;
     unsigned char *new_pkt;
+    int body_size = ip->total_length - ip_header_size;
 
     if (ip_header_size == 24) { // has an options field!
         ip->shim_size_opt++; // make the options size bigger
@@ -53,25 +70,30 @@ uchar *insert_shim(uchar *orig, struct ip_addr addr, uint64_t rando, uint32_t *s
         ip->protocol = AITF;
         memcpy(new_pkt, ip, sizeof(struct _header_ip)); // copy the pack in
     } else {
-        ip->original_protocol = ip->protocol;
+        uint16_t original_protocol = ip->protocol;
         ip->IHL = 6; // make the packet bigger
-        ip->shim_size_opt = 1; // make the shim size 1
         *size = ip->total_length+sizeof(struct _shim_stack)+OPTIONS_LAYER_SIZE;
         new_pkt = calloc(*size, 1);
         ip->total_length = *size;
         ip->protocol = AITF;
         memcpy(new_pkt, ip, sizeof(struct _header_ip)); // write packet
+
+        struct _header_ip *ipn = (struct _header_ip *)new_pkt;
+        ipn->shim_size_opt = 1;
+        ipn->original_protocol = original_protocol;
+
     }
 
-    size_t hash_offset = sizeof(struct _header_ip)+4;
-    // write the shim layer
-    memcpy(new_pkt+sizeof(struct _header_ip), &addr, 4);
-    memcpy(new_pkt+hash_offset, &rando, sizeof(uint64_t));
+    unsigned char *address_area  = new_pkt + sizeof(struct _header_ip);
+    unsigned char *random_area   = address_area + IP_ADDR_SIZE;
+    unsigned char *old_data_area = random_area + RANDOM_DATA_SIZE;
 
+    // write the shim layer
+    memcpy(address_area, &addr, IP_ADDR_SIZE);
+    memcpy(random_area,  &rando, RANDOM_DATA_SIZE);
 
     // insert the rest of the data
-    memcpy(new_pkt+sizeof(struct _header_ip)+sizeof(struct _shim_stack),
-            orig+ip_header_size, ip->total_length - ip_header_size);
+    memcpy(old_data_area, orig+ip_header_size, body_size);
 
     fix_packet((struct _header_ip *)new_pkt);
     recompute_checksum(new_pkt);
@@ -106,7 +128,7 @@ uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8
 
         // start piecing together the old packet
         iph->total_length -= shim_size;
-        
+
         // allocate space for the new packet
         unsigned char *new_pkt = malloc(iph->total_length);
 
@@ -116,9 +138,9 @@ uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8
 
         //copy payload in
         memcpy(new_pkt+offsetval // write memory to here
-               ,data+sizeof(struct _header_ip)+shim_size // write memory from here
-               ,iph->total_length-offsetval); // write this much memory
-        
+                ,data+sizeof(struct _header_ip)+shim_size // write memory from here
+                ,iph->total_length-offsetval); // write this much memory
+
         // if the packet is now void of shim shit
         if (iph->IHL == PACKET_SANS_OPTIONS) {
             ((struct _header_ip *)new_pkt) -> protocol = iph->original_protocol;
@@ -141,7 +163,7 @@ void recompute_checksum(unsigned char *data) {
     uint16_t *header_shorts = (uint16_t *)data;
     uint32_t sum = 0;
     size_t counter = 0;
-    
+
     for(; counter < header_size; counter++) {
         sum += header_shorts[counter];
     }
@@ -172,7 +194,7 @@ int ip_len(struct ip_addr ip) {
     if (ip.b > 100) ct++;
     if (ip.c > 100) ct++;
     if (ip.d > 100) ct++;
-    
+
     if (ip.a > 10) ct++;
     if (ip.b > 10) ct++;
     if (ip.c > 10) ct++;
@@ -184,7 +206,7 @@ int ip_len(struct ip_addr ip) {
 void pretty_print_packet(struct _header_ip *ip) {
     int srclen = 31 - (ip_len(ip->source) + 4),
         destlen = 31 - (ip_len(ip->dest) + 5);
-    
+
     printf("╔═══╤═══╤═══════╤═══════════════╗\n");
     printf("║%3i│%3i│%7i│%15i║\n", ip->version, ip->IHL, ip->serv_type, ip->total_length);
     printf("╟───┴───┴───────┼───────────────╢\n");
@@ -215,7 +237,7 @@ void fancy_print_packet(struct _header_ip *ip) {
     printf("CHK: %i\n", ip->checksum);
     printf("SRC: ");print_ip(ip->source);puts("");
     printf("DST: ");print_ip(ip->dest);puts("");
-    
+
     if (ip->IHL > 5) {
         printf("SSO: %i\n", ip->shim_size_opt);
         printf("OPR: %i\n", ip->original_protocol);

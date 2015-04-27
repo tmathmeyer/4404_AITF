@@ -10,6 +10,8 @@
 #define PACKET_WITH_OPTIONS 6
 #define PACKET_SANS_OPTIONS 5
 #define OPTIONS_LAYER_SIZE 4
+#define IP_ADDR_SIZE 4
+#define RANDOM_DATA_SIZE 8
 #define uchar unsigned char
 
 struct ip_addr {
@@ -70,5 +72,6 @@ void fancy_print_packet(struct _header_ip *ip);
 void print_ip(struct ip_addr ip);
 void fix_packet(struct _header_ip *h);
 void pretty_print_packet(struct _header_ip *ip);
+void print_bytes(struct _header_ip *header);
 
 #endif

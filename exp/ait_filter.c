@@ -12,8 +12,49 @@
 
 bool debug_flag = 1;
 
-void calcMD5(uint64_t *hash, uint64_t *salt, uint64_t *ip)
-{
+int printable(char c) {
+    if (c >= 33 && c <= 126) {
+        return 1;
+    }
+
+    return 0;
+}
+
+void print_tcp(unsigned char *data, uint16_t size) {
+    int i = 0;
+    while(size) {
+        if (printable(*data)) {
+            putchar('-');
+            putchar(' ');
+            putchar(*data);
+            putchar('-');
+        } else {
+            printf("-%x-", *data);
+        }
+
+        if ((++i)%16 == 0) {
+            printf("\n");
+        }
+
+        data ++;
+        size --;
+    }
+}
+
+bool internal_ip(struct ip_addr address) {
+    if (address.a != 10) return false;
+    if (address.b != 4) return false;
+    if (address.c != 31) return false;
+    return true;
+}
+
+bool internal_packet(struct _header_ip *header) {
+    // source and destination must be internal
+    return internal_ip(header->source) && internal_ip(header->dest);
+}
+
+
+void calcMD5(uint64_t *hash, uint64_t *salt, uint64_t *ip) {
     unsigned char input[16];
     unsigned char temp_result[16];
     *((uint64_t *)input) = *salt;
@@ -21,8 +62,7 @@ void calcMD5(uint64_t *hash, uint64_t *salt, uint64_t *ip)
     MD5(input, 16, temp_result);
     *hash = *((uint64_t *) temp_result) ^ *((uint64_t *)(temp_result+8));
 
-    if(debug_flag)
-    {
+    if(debug_flag) {
         printf("Hash: %lu\n", *hash);
     }
 }
@@ -63,6 +103,11 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
 
     ip = (struct _header_ip *)original;
 
+    if (!internal_packet(ip)) {
+        return 0;
+    }
+
+
 #ifdef CORE_ROUTER
     // if the protocol is PPM, validate the packet
     // otherwise, pass it along with shim
@@ -90,22 +135,44 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
 #endif // CORE ROUTER
 #ifdef GATEWAY_ROUTER
     if (ip->protocol == FILTER) {
+        puts("---------FILTER???????");
         // negotiate handshake with other
         // do things
     } else if(ip->protocol == PPM) {
+        puts("---------PPM??????");
         //if we get a PPM packet from an attacker, we need to filter!!
     } else if (ip->protocol == AITF) {
         // if we get an AITF packet as a gateway router, strip it
         struct _shim_stack *shims;
         uint8_t shimc;
 
+        puts("AITF PACKET");
+
+
+
+        puts("\n\n\nthis shit better be the same");
+        print_bytes((struct _header_ip *)original);
+        puts("----------------------------------");
         *wb = strip_shim(original, &shims, &shimc, ALL_SHIMS);
-        return true;
+        print_bytes((struct _header_ip *)*wb);
+        puts("\n\n");
+
+        return *wb != NULL;
     }
 #endif // GATEWAY_ROUTER
-        //insert shim layer, pass along the packet
-        *wb = insert_shim(original, MSI, hash(ip), size);
-        return *wb != NULL;
+    //insert shim layer, pass along the packet
+
+    puts("NORMAL_PACKET");
+
+    puts("\n\n\nthis shit better be the same");
+    print_bytes((struct _header_ip *)original);
+    puts("-------------------------------");
+    *wb = insert_shim(original, MSI, 42, size);
+    print_bytes((struct _header_ip *)*wb);
+    puts("\n\n");
+    
+    
+    return *wb != NULL;
 }
 
 #define handle struct nfq_q_handle
@@ -117,7 +184,8 @@ int cb(handle *qh, struct nfgenmsg *msg, struct nfq_data *nfa, void *data) {
 
     unsigned char *new_pkt;
     uint32_t size;
-    if(monitor_packet(nfa, &new_pkt, &size)) {
+    if(monitor_packet(nfa, &new_pkt, &size) == 1) {
+        puts("sending new packet!");
         return nfq_set_verdict(qh, id, NF_ACCEPT, size, new_pkt);
     } else {
         return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
