@@ -10,6 +10,14 @@
 #include <openssl/md5.h>
 #include "iputils.h"
 
+
+void blockIP(struct ip_addr *ip) {
+    char buff[100] = {0};
+    sprintf(buff, "iptables -A INPUT -s %d.%d.%d.%d -j DROP",
+            ip->a, ip->b, ip->c, ip->d);
+    system(buff);
+}
+
 bool debug_flag = 1;
 
 int printable(char c) {
@@ -135,43 +143,32 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
 #endif // CORE ROUTER
 #ifdef GATEWAY_ROUTER
     if (ip->protocol == FILTER) {
-        puts("---------FILTER???????");
         // negotiate handshake with other
         // do things
     } else if(ip->protocol == PPM) {
-        puts("---------PPM??????");
         //if we get a PPM packet from an attacker, we need to filter!!
     } else if (ip->protocol == AITF) {
         // if we get an AITF packet as a gateway router, strip it
         struct _shim_stack *shims;
         uint8_t shimc;
 
-        puts("AITF PACKET");
-
-
-
-        puts("\n\n\nthis shit better be the same");
-        print_bytes((struct _header_ip *)original);
-        puts("----------------------------------");
-        *wb = strip_shim(original, &shims, &shimc, ALL_SHIMS);
+        puts("+=AITF PACKET========");
+        *wb = strip_shim(original, &shims, &shimc, ALL_SHIMS, size);
+        pretty_print_packet((struct _header_ip *)*wb);
         print_bytes((struct _header_ip *)*wb);
-        puts("\n\n");
+        puts("+=AITF PACKET========\n\n");
+
 
         return *wb != NULL;
     }
 #endif // GATEWAY_ROUTER
     //insert shim layer, pass along the packet
 
-    puts("NORMAL_PACKET");
-
-    puts("\n\n\nthis shit better be the same");
+    puts("=NORMAL_PACKET========");
+    pretty_print_packet((struct _header_ip *)original);
     print_bytes((struct _header_ip *)original);
-    puts("-------------------------------");
     *wb = insert_shim(original, MSI, 42, size);
-    print_bytes((struct _header_ip *)*wb);
-    puts("\n\n");
-    
-    
+    puts("+=NORMAL PACKET========\n\n");
     return *wb != NULL;
 }
 
@@ -185,7 +182,6 @@ int cb(handle *qh, struct nfgenmsg *msg, struct nfq_data *nfa, void *data) {
     unsigned char *new_pkt;
     uint32_t size;
     if(monitor_packet(nfa, &new_pkt, &size) == 1) {
-        puts("sending new packet!");
         return nfq_set_verdict(qh, id, NF_ACCEPT, size, new_pkt);
     } else {
         return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
@@ -212,7 +208,7 @@ int main(int argc, char **argv) {
 
     int ctr = 0;
     while(++ctr < argc) {
-        if (!(strncmp(argv[ctr], "-v", 2) && strncmp(argv[ctr], "--verbose", 8))) {
+        if (!(strncmp(argv[ctr], "-v", 2)&&strncmp(argv[ctr], "--verbose", 8))){
             if (ctr >= argc-1) {
                 usage();
                 exit(0);

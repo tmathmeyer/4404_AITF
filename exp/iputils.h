@@ -4,7 +4,7 @@
 
 #include <stdint.h>
 #define PPM 254
-#define AITF 253
+#define AITF 250
 #define FILTER 252
 #define ALL_SHIMS 0
 #define PACKET_WITH_OPTIONS 6
@@ -34,8 +34,9 @@ struct _header_ip {
     uint16_t checksum;
     struct ip_addr source;
     struct ip_addr dest;
-    uint16_t shim_size_opt;
-    uint16_t original_protocol;
+    uint8_t shim_size_opt;
+    uint8_t original_protocol;
+    uint16_t buffer;
 } __attribute__ ((aligned (4)));
 
 struct _tcp {
@@ -67,7 +68,7 @@ void clean_packet(struct _header_ip *h);
 struct _tcp_payload data_in(uchar *raw);
 uchar *insert_shim(uchar *orig, struct ip_addr addr, uint64_t rando, uint32_t *size);
 void recompute_checksum(uchar *data);
-uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8_t max);
+uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8_t max, uint32_t *size);
 void fancy_print_packet(struct _header_ip *ip);
 void print_ip(struct ip_addr ip);
 void fix_packet(struct _header_ip *h);

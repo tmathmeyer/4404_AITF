@@ -101,7 +101,7 @@ uchar *insert_shim(uchar *orig, struct ip_addr addr, uint64_t rando, uint32_t *s
 }
 
 
-uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8_t max) {
+uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8_t max, uint32_t *size) {
     struct _header_ip *iph = (struct _header_ip *)data;
     clean_packet(iph);
     if (iph->IHL == PACKET_WITH_OPTIONS) {
@@ -129,6 +129,7 @@ uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8
         // start piecing together the old packet
         iph->total_length -= shim_size;
 
+        *size = iph->total_length;
         // allocate space for the new packet
         unsigned char *new_pkt = malloc(iph->total_length);
 
@@ -143,7 +144,7 @@ uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8
 
         // if the packet is now void of shim shit
         if (iph->IHL == PACKET_SANS_OPTIONS) {
-            ((struct _header_ip *)new_pkt) -> protocol = iph->original_protocol;
+            ((struct _header_ip *)new_pkt)->protocol = iph->original_protocol;
         }
 
         fix_packet((struct _header_ip *)new_pkt);

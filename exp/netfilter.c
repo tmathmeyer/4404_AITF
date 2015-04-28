@@ -28,15 +28,17 @@ void print_tcp(unsigned char *data, uint16_t size) {
     int i = 0;
     while(size) {
         if (printable(*data)) {
+            putchar('-');
+            putchar(' ');
             putchar(*data);
+            putchar('-');
         } else {
-            printf(" . ");
+            printf("-%x-", *data);
         }
 
-        if (i%16 == 0) {
+        if ((++i)%16 == 0) {
             printf("\n");
         }
-        i++;
 
         data ++;
         size --;
@@ -73,7 +75,8 @@ void print_shim(unsigned char *data) {
 
     uint8_t size = 0;
     struct _shim_stack *shims;
-    data = strip_shim(data, &shims, &size, 0);
+    uint32_t fuck;
+    data = strip_shim(data, &shims, &size, 0, &fuck);
 
 
     ip_h = (struct _header_ip *)data;
@@ -83,7 +86,7 @@ void print_shim(unsigned char *data) {
     payload = data_in(data);
     
     printf("TCP PAYLOAD: %i\n", payload.size);
-    //print_tcp(payload.data, payload.size);
+    print_tcp(payload.data, payload.size);
 }
 
 
