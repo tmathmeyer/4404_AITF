@@ -42,6 +42,31 @@ void calcMD5(uint64_t *hash, uint64_t *salt, uint64_t *ip)
 	}
 }
 
+//Send a filtering request to the victim gateway
+void SendFilteringRequest(struct ip_addr *ip) {
+	//Declare Packet
+	struct _header_ip *newHeader = malloc(sizeof(struct _header_ip));
+	struct _tcp_payload *newPayload = malloc(sizeof(struct _tcp_payload));
+	uchar *packet = malloc(1000);  //Ultimately this is the packet we want to send
+
+	//Make the Source and Dest IPs
+	struct ip_addr victim = {.a=192, .b=168, .c=1, .d=195}; //ask Ted what IP is
+	struct ip_addr victimGateway = {.a=192, .b=168, .c=1, .d=195}; //ask Ted what IP is
+	
+	//Make IP Header Field = FILTER
+	newHeader->protocol = FILTER;
+	newHeader->source = victim;
+	newHeader->dest = victimGateway;
+	
+	//Put IP address in payload
+	struct _tcp_payload payload;
+	unsigned char *data = malloc(100);
+	sprintf(data, "%s.%s.%s.%s", ip.a, ip.b, ip.c, ip.d);
+	payload.data =  data;
+	payload.size = (uint32_t) sizeof(data);
+	//Send packet to Victim gateway
+	
+}
 
 int main (int argc, char **argv)
 {
