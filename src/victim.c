@@ -3,9 +3,12 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <string.h>
 #include <openssl/md5.h>
-
+#include "iputils.h"
+#include "victim.h"
+#include <inttypes.h>
 
 #define MD5_START_LENGTH 128
 #define MD5_FINAL_LENGTH 64
@@ -24,10 +27,26 @@ void printHelp(void)
 	exit(0);
 }
 
+//Send a filtering request to the victim gateway
+void SendFilteringRequest(struct ip_addr *ip) {
+	//Declare Packet
+	struct _header_ip *newHeader = malloc(sizeof(struct _header_ip));
+
+	//Make the Source and Dest IPs
+	struct ip_addr victim = {.a=192, .b=168, .c=1, .d=195}; //ask Ted what IP is
+	struct ip_addr filterDest = {.a=ip->a, .b=ip->b, .c=ip->c, .d=ip->c}; //ask Ted what IP is
+	
+	//Make IP Header Field = FILTER
+	newHeader->protocol = FILTER;
+	newHeader->source = victim;
+	newHeader->dest = filterDest;
+	
+}
+
 /*
 * Function to calculate MD5 hash for salt and IP
 */
-void calcMD5(uint64_t *hash, uint64_t *salt, uint64_t *ip)
+void calcMD5(uint64_t *hash, uint64_t *salt)  //, uint64_t *ip)
 {
     unsigned char input[16];
     unsigned char temp_result[16];
@@ -36,10 +55,12 @@ void calcMD5(uint64_t *hash, uint64_t *salt, uint64_t *ip)
 	MD5(input, 16, temp_result);
 	*hash = *((uint64_t *) temp_result) ^ *((uint64_t *)(temp_result+8));
 
+	/*
 	if(dFlag)
 	{
 		printf("Hash: %llu\n", *hash);
 	}
+	*/
 }
 
 //Send a filtering request to the victim gateway
@@ -78,7 +99,7 @@ int main (int argc, char **argv)
 	char *cvalue = NULL;
 	int c;
 	
-	opterr = 0;
+	//int opterr = 0;
 	while ((c = getopt (argc, argv, "t:s:hvd")) != -1)
     switch (c)
 	{
@@ -123,8 +144,9 @@ int main (int argc, char **argv)
 		return 0;
 	}
 	
-	uint64_t ip;
-	uint64_t salt;
-	uint64_t hash;
-    calcMD5(&hash, &salt, &ip);
+	uint64_t ip = 5;
+	uint64_t salt = 2;
+	uint64_t hash = 7;
+    calcMD5(&hash, &salt); //, &ip);
+	printf("I WORRK. Here is my hash %" PRIu64 "\n", hash);
 }
