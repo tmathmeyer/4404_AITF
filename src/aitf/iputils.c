@@ -67,10 +67,10 @@ uchar *insert_shim(uchar *orig, struct ip_addr addr, uint64_t rando, uint32_t *s
     if (ip->protocol != AITF) {
         packet_increase = 16;
     }
-    
+
 
     struct _header_ip *new_ip = malloc(*size + packet_increase);
-    
+
     unsigned char *header = (unsigned char *)new_ip;
     unsigned char *shimla = header + sizeof(struct _header_ip);
     unsigned char *datalo = shimla + sizeof(struct _shim_stack);
@@ -91,7 +91,7 @@ uchar *insert_shim(uchar *orig, struct ip_addr addr, uint64_t rando, uint32_t *s
     } else {
         new_ip->shim_size_opt += 1;
     }
-   
+
 
     if (new_ip->protocol != AITF) {
         new_ip->original_protocol = new_ip->protocol;
@@ -103,13 +103,13 @@ uchar *insert_shim(uchar *orig, struct ip_addr addr, uint64_t rando, uint32_t *s
 
     recompute_checksum(header);
 
-    
+
     return header;
 }
 
 uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8_t max, uint32_t *size) {
     (void)max;
-    
+
     struct _header_ip *ip = (struct _header_ip *)data;
     *sl = ip->shim_size_opt;
     uint32_t mem = *sl * sizeof(struct _shim_stack);
@@ -118,11 +118,11 @@ uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8
 
 
     *size = ntohs(ip->total_length);
-    
+
     struct _header_ip *new_ip = malloc(*size - 16);
     unsigned char *header = (uchar *)new_ip;
     unsigned char *body = header + 20;
-    
+
     size_t header_size = 20;
     size_t body_size = *size - 36;
 
@@ -134,8 +134,8 @@ uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8
     new_ip->total_length = htons(*size);
     new_ip->IHL = 5;
     new_ip->protocol = ip->original_protocol;
-    
-    
+
+
     recompute_checksum(header);
     return header;
 }
@@ -211,6 +211,7 @@ void pretty_print_packet(struct _header_ip *ip) {
     printf("╟───────────────────────────────╢\n");
     printf("║%*cDEST:", destlen/2, ' '); print_ip(ip->dest); printf("%*c║\n", destlen-(destlen/2),' ');
     printf("╚═══════════════════════════════╝\n");
+
 }
 
 void print_ip(struct ip_addr ip) {

@@ -4,7 +4,7 @@ VERSION = 1.0.0
 LIBS = -lnetfilter_queue -lssl -lcrypto
 
 # flags
-CFLAGS   = -std=c11 -Wextra -Wall -D GATEWAY_ROUTER
+CFLAGS   = -std=c11 -Wextra -Wall
 LDFLAGS  = ${LIBS}
 
 # compiler and linker

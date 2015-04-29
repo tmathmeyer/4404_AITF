@@ -63,6 +63,12 @@ struct _tcp_payload {
     uint32_t size;
 };
 
+struct ip_map {
+    struct ip_addr address;
+    struct _shim_stack *shims;
+    size_t shim_count;
+};
+
 int ip_cmp(struct ip_addr *a, struct ip_addr *b);
 void clean_packet(struct _header_ip *h);
 struct _tcp_payload data_in(uchar *raw);

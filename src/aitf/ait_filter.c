@@ -9,6 +9,30 @@
 #include <libnetfilter_queue/libnetfilter_queue.h>
 #include <openssl/md5.h>
 #include "iputils.h"
+#include "dlist.h"
+
+
+int debug_level = 0;
+dlist *ipmap;
+
+
+void light(char *fail) {
+    if (debug_level > 0) {
+        printf("%s", fail);
+    }
+}
+
+void alot(char *fail) {
+    if (debug_level > 1) {
+        printf("%s", fail);
+    }
+}
+
+void toofuckingmuch(char *fail) {
+    if (debug_level > 2) {
+        printf("%s", fail);
+    }
+}
 
 
 void blockIP(struct ip_addr *ip) {
@@ -18,36 +42,52 @@ void blockIP(struct ip_addr *ip) {
     system(buff);
 }
 
-bool debug_flag = 1;
 
-int printable(char c) {
-    if (c >= 33 && c <= 126) {
-        return 1;
+
+void insert_shim_for_ip(struct ip_addr addr, struct _shim_stack *shims, size_t shimc) {
+    struct ip_map *map;
+    struct _shim_stack *freeme;
+    each(ipmap, map) {
+        if (ip_cmp(&addr, &(map->address))) {
+            freeme = map->shims;
+            map->shims = shims;
+            map->shim_count = shimc;
+            free(freeme);
+            return;
+        }
     }
 
-    return 0;
+    map = malloc(sizeof(struct ip_map));
+    memcpy(map, &addr, sizeof(struct ip_addr));
+    map->shims = shims;
+    map->shim_count = shimc;
+
+    dlist_add(ipmap, map);
 }
 
-void print_tcp(unsigned char *data, uint16_t size) {
-    int i = 0;
-    while(size) {
-        if (printable(*data)) {
-            putchar('-');
-            putchar(' ');
-            putchar(*data);
-            putchar('-');
-        } else {
-            printf("-%x-", *data);
+struct _shim_stack *get_shim_for_ip(struct ip_addr addr, size_t *size) {
+    struct ip_map *map = NULL;
+    each(ipmap, map) {
+        if (map!=NULL && ip_cmp(&addr, &(map->address))) {
+            *size = map->shim_count;
+            return map->shims;
         }
+    }
+    *size = 0;
+    return NULL;
+}
 
-        if ((++i)%16 == 0) {
+void print_shims(struct _shim_stack *shims, size_t shimc) {
+    while(shimc) {
+        shimc--;
+        if (debug_level > 1) {
+            printf("  [%zd] -> %i :: ", shimc, shims[shimc].hash);
+            print_ip(shims[shimc].shim_ip);
             printf("\n");
         }
-
-        data ++;
-        size --;
     }
 }
+
 
 bool internal_ip(struct ip_addr address) {
     if (address.a != 10) return false;
@@ -57,7 +97,6 @@ bool internal_ip(struct ip_addr address) {
 }
 
 bool internal_packet(struct _header_ip *header) {
-    // source and destination must be internal
     return internal_ip(header->source) && internal_ip(header->dest);
 }
 
@@ -69,10 +108,6 @@ void calcMD5(uint64_t *hash, uint64_t *salt, uint64_t *ip) {
     *((uint64_t *)(input+8)) = *ip;
     MD5(input, 16, temp_result);
     *hash = *((uint64_t *) temp_result) ^ *((uint64_t *)(temp_result+8));
-
-    if(debug_flag) {
-        printf("Hash: %lu\n", *hash);
-    }
 }
 
 //Calculates the hash using the MD% hashing function
@@ -116,48 +151,84 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
         // no packet, return false
         *size = 0;
         *wb = NULL;
+        toofuckingmuch("attempted to read a packet, but failed\n");
         return false;
+    } else {
+        toofuckingmuch("recieved a packet\n");
     }
+
 
     ip = (struct _header_ip *)original;
 
     if (!internal_packet(ip)) {
+        toofuckingmuch("the packet was not internal to the system\n");
         return 0;
+    } else {
+        toofuckingmuch("parsing the packet:\n");
+#ifdef CORE
+        toofuckingmuch("  --> CORE ROUTER\n");
+#endif
+#ifdef GATE
+        toofuckingmuch("  --> GATEWAY ROUTER\n");
+#endif
     }
 
 
 
-#ifdef CORE_ROUTER
+
+
+#ifdef CORE
     struct ip_addr ATK2 = {8, 8, 8, 8};
     ATK = ATK2;
     // if the protocol is PPM, validate the packet
     // otherwise, pass it along with shim
     if (ip->protocol == PPM) {
+        alot("core router recieved a PPM\n");
         // remove top shim (should be for us) and validate it
         struct _shim_stack *shims;
         uint8_t shimc;
         *wb = strip_shim(original, &shims, &shimc, ALL_SHIMS, size);
 
-        // there are no shims, or the shim is shit
-        if (shimc == 0 || !validate(ip, shims)) {
-            return false;
-        }
-
         // if this is the last chain in the line
         if (ip->shim_size_opt == 0) {
             // install filter
             //filter_throughput(ip);
+            alot("filtering the jerk who is spamming me\n");
             return -1;
+        }
+
+        // there are no shims, or the shim is shit
+        if (shimc == 0 || !validate(ip, shims)) {
+            alot("bad shim layer, or non-existant layer\n");
+            return false;
         }
 
         // keep going!
         return true;
     }
 #endif // CORE ROUTER
-#ifdef GATEWAY_ROUTER
+#ifdef GATE
     if (ip->protocol == FILTER) {
-        // negotiate handshake with other
-        // do things
+        alot("+=FILTER REQUEST=====\n");
+        if (debug_level > 0) {
+            print_ip(ip->source);
+            printf(" is asking for protection from ");
+            print_ip(ip->dest);
+            puts("\n");
+
+            size_t shimc;
+            struct _shim_stack *shims = get_shim_for_ip(ip->dest, &shimc);
+            if (shimc > 0) {
+                print_shims(shims, shimc);
+            } else {
+                puts("there were no shims! :O nothing can be done!");
+            }
+
+            printf("\n");
+        }
+        alot("+FILTER REQUEST=====\n\n\n");
+
+        return -1;
     } else if(ip->protocol == PPM) {
         //if we get a PPM packet from an attacker, we need to filter!!
     } else if (ip->protocol == AITF) {
@@ -165,25 +236,23 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
         struct _shim_stack *shims;
         uint8_t shimc;
 
-        puts("+=AITF PACKET========");
+        light("+=AITF PACKET========\n");
         *wb = strip_shim(original, &shims, &shimc, ALL_SHIMS, size);
-        puts("shims:");
-        while(shimc) {
-            shimc--;
-            printf("  [%i] -> %i :: ", shimc, shims[shimc].hash);
-            print_ip(shims[shimc].shim_ip);
-            printf("\n");
-        }
-        puts("+=AITF PACKET========\n\n");
+        alot("shims:\n");
+        print_shims(shims, shimc);
+        insert_shim_for_ip(ip->source, shims, shimc);
+        light("+=AITF PACKET========\n\n\n");
 
         return *wb != NULL;
     }
 #endif // GATEWAY_ROUTER
     //insert shim layer, pass along the packet
-    puts("+=INSERTED SHIM=============\n");
-    pretty_print_packet((struct _header_ip *)original);
+    light("+=NORMAL PACKET=============\n");
+    if (debug_level > 1) {
+        pretty_print_packet((struct _header_ip *)original);
+    }
     *wb = insert_shim(original, ATK, 42, size);
-    puts("+=INSERTED SHIM=============\n\n");
+    light("+=NORMAL PACKET=============\n\n");
     return *wb != NULL;
 }
 
@@ -196,10 +265,15 @@ int cb(handle *qh, struct nfgenmsg *msg, struct nfq_data *nfa, void *data) {
 
     unsigned char *new_pkt;
     uint32_t size;
-    if(monitor_packet(nfa, &new_pkt, &size) == 1) {
+    
+    int packet_val = monitor_packet(nfa, &new_pkt, &size);
+
+    if(packet_val == 1) {
         return nfq_set_verdict(qh, id, NF_ACCEPT, size, new_pkt);
-    } else {
+    } else if (packet_val == 0) {
         return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
+    } else {
+        return nfq_set_verdict(qh, id, NF_DROP, 0, NULL);
     }
 }
 
@@ -218,9 +292,9 @@ void usage() {
 }
 
 
-int debug_level = 0;
 int main(int argc, char **argv) {
-
+    ipmap = dlist_new();
+    dlist_add(ipmap, NULL);
     int ctr = 0;
     while(++ctr < argc) {
         if (!(strncmp(argv[ctr], "-v", 2)&&strncmp(argv[ctr], "--verbose", 8))){
@@ -230,12 +304,16 @@ int main(int argc, char **argv) {
             } else {
                 ctr++;
                 if (!strncmp(argv[ctr], "light", 5)) {
+                    puts("light debugging");
                     debug_level = 1;
                 } else if (!strncmp(argv[ctr], "rambling", 8)) {
+                    puts("rambling debugging");
                     debug_level = 2;
                 } else if (!strncmp(argv[ctr], "annoying", 8)) {
+                    puts("annoying debugging");
                     debug_level = 3;
                 } else if (!strncmp(argv[ctr], "obnoxious", 9)) {
+                    puts("too fucking much debugging");
                     debug_level = 4;
                 }
             }
