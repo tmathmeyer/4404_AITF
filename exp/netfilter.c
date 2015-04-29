@@ -25,8 +25,21 @@ int printable(char c) {
 }
 
 void print_tcp(unsigned char *data, uint16_t size) {
+    int i = 0;
     while(size) {
-        putchar(*data);
+        if (printable(*data)) {
+            putchar('-');
+            putchar(' ');
+            putchar(*data);
+            putchar('-');
+        } else {
+            printf("-%x-", *data);
+        }
+
+        if ((++i)%16 == 0) {
+            printf("\n");
+        }
+
         data ++;
         size --;
     }
@@ -46,23 +59,34 @@ void print_shim_stack_layer(struct _shim_stack *shims, int size) {
 }
 
 void print_shim(unsigned char *data) {
+    struct _tcp_payload payload = data_in(data);
+    //print_tcp(payload.data, payload.size);
+    printf("TCP PAYLOAD: %i\n", payload.size);
+
+
     struct _header_ip *ip_h = (struct _header_ip *)data;
     fancy_print_packet(ip_h);
-    
-    
+
+
     uint32_t bogus;
 
     data = insert_shim(data, paste, 2222, &bogus);
     data = insert_shim(data, tests, 5678, &bogus);
-    
+
     uint8_t size = 0;
     struct _shim_stack *shims;
-    data = strip_shim(data, &shims, &size, 0);
-    
-    
+    uint32_t fuck;
+    data = strip_shim(data, &shims, &size, 0, &fuck);
+
+
     ip_h = (struct _header_ip *)data;
     puts("----------------------");
     fancy_print_packet(ip_h);
+
+    payload = data_in(data);
+    
+    printf("TCP PAYLOAD: %i\n", payload.size);
+    print_tcp(payload.data, payload.size);
 }
 
 
@@ -80,7 +104,7 @@ unsigned char *print_pkt (struct nfq_data *tb) {
 
         if (ip_cmp(&paste, &(h->source)) && htl>80 && htl<200) {
             puts("===================");
-            
+
             print_shim(data);
 
             puts("===================");
@@ -187,7 +211,7 @@ int main(int argc, char **argv) {
     fd = nfq_fd(h);
 
     while ((rv = recv(fd, buf, sizeof(buf), 0)) && rv >= 0) {
-            nfq_handle_packet(h, buf, rv);
+        nfq_handle_packet(h, buf, rv);
     }
 
     printf("unbinding from queue 0\n");
