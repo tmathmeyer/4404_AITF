@@ -7,7 +7,6 @@
 #include <string.h>
 #include <openssl/md5.h>
 #include "iputils.h"
-#include "victim.h"
 #include <inttypes.h>
 
 #define MD5_START_LENGTH 128
@@ -41,26 +40,6 @@ void SendFilteringRequest(struct ip_addr *ip) {
 	newHeader->source = victim;
 	newHeader->dest = filterDest;
 	
-}
-
-/*
-* Function to calculate MD5 hash for salt and IP
-*/
-void calcMD5(uint64_t *hash, uint64_t *salt)  //, uint64_t *ip)
-{
-    unsigned char input[16];
-    unsigned char temp_result[16];
-    *((uint64_t *)input) = *salt;
-    *((uint64_t *)(input+8)) = *hash;
-	MD5(input, 16, temp_result);
-	*hash = *((uint64_t *) temp_result) ^ *((uint64_t *)(temp_result+8));
-
-	/*
-	if(dFlag)
-	{
-		printf("Hash: %llu\n", *hash);
-	}
-	*/
 }
 
 //Send a filtering request to the victim gateway
@@ -147,6 +126,6 @@ int main (int argc, char **argv)
 	uint64_t ip = 5;
 	uint64_t salt = 2;
 	uint64_t hash = 7;
-    calcMD5(&hash, &salt); //, &ip);
-	printf("I WORRK. Here is my hash %" PRIu64 "\n", hash);
+    //calcMD5(&hash, &salt, &ip);
+	//printf("I WORRK. Here is my hash %" PRIu64 "\n", hash);
 }
