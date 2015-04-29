@@ -1,0 +1,1 @@
+void calcMD5(uint64_t *hash, uint64_t *salt);
