@@ -91,6 +91,16 @@ bool validate(struct _header_ip *header, struct _shim_stack *shims) {
 
 
 struct ip_addr MSI = {.a=0, .b=0, .c=0, .d=0};
+struct ip_addr ATK = {.a=10, .b=4, .c=31, .d=1};
+struct ip_addr VIC = {.a=10, .b=4, .c=31, .d=4};
+
+bool is_route(struct ip_addr X, struct ip_addr Y) {
+    int x = ip_cmp(&X, &ATK) && ip_cmp(&Y, &VIC);
+    int y = ip_cmp(&Y, &ATK) && ip_cmp(&X, &VIC);
+
+    return x||y;
+}
+
 
 
 /*
@@ -116,14 +126,17 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
     }
 
 
+
 #ifdef CORE_ROUTER
+    struct ip_addr ATK2 = {8, 8, 8, 8};
+    ATK = ATK2;
     // if the protocol is PPM, validate the packet
     // otherwise, pass it along with shim
     if (ip->protocol == PPM) {
         // remove top shim (should be for us) and validate it
         struct _shim_stack *shims;
         uint8_t shimc;
-        *wb = strip_shim(original, &shims, &shimc, 1);
+        *wb = strip_shim(original, &shims, &shimc, ALL_SHIMS, size);
 
         // there are no shims, or the shim is shit
         if (shimc == 0 || !validate(ip, shims)) {
@@ -133,7 +146,7 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
         // if this is the last chain in the line
         if (ip->shim_size_opt == 0) {
             // install filter
-            filter_throughput(ip);
+            //filter_throughput(ip);
             return -1;
         }
 
@@ -154,21 +167,23 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
 
         puts("+=AITF PACKET========");
         *wb = strip_shim(original, &shims, &shimc, ALL_SHIMS, size);
-        pretty_print_packet((struct _header_ip *)*wb);
-        print_bytes((struct _header_ip *)*wb);
+        puts("shims:");
+        while(shimc) {
+            shimc--;
+            printf("  [%i] -> %i :: ", shimc, shims[shimc].hash);
+            print_ip(shims[shimc].shim_ip);
+            printf("\n");
+        }
         puts("+=AITF PACKET========\n\n");
-
 
         return *wb != NULL;
     }
 #endif // GATEWAY_ROUTER
     //insert shim layer, pass along the packet
-
-    puts("=NORMAL_PACKET========");
+    puts("+=INSERTED SHIM=============\n");
     pretty_print_packet((struct _header_ip *)original);
-    print_bytes((struct _header_ip *)original);
-    *wb = insert_shim(original, MSI, 42, size);
-    puts("+=NORMAL PACKET========\n\n");
+    *wb = insert_shim(original, ATK, 42, size);
+    puts("+=INSERTED SHIM=============\n\n");
     return *wb != NULL;
 }
 

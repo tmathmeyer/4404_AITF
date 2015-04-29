@@ -4,7 +4,7 @@
 
 #include <stdint.h>
 #define PPM 254
-#define AITF 250
+#define AITF 253
 #define FILTER 252
 #define ALL_SHIMS 0
 #define PACKET_WITH_OPTIONS 6
