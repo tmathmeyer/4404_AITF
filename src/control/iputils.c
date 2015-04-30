@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <netinet/in.h>
+#include <sys/time.h>
 #include <stdio.h>
 #include "iputils.h"
 
@@ -54,6 +55,12 @@ void print_bytes(struct _header_ip *header) {
 }
 
 
+uint64_t aitf_milis() {
+    struct timeval  tv;
+    gettimeofday(&tv, NULL);
+    uint64_t time_in_mill = (tv.tv_sec)*1000 + (tv.tv_usec)/1000;
+    return time_in_mill;
+}
 
 uchar *insert_shim(uchar *orig, struct ip_addr addr, uint64_t rando, uint32_t *size) {
     struct _header_ip *ip = (struct _header_ip *)orig;
@@ -61,20 +68,16 @@ uchar *insert_shim(uchar *orig, struct ip_addr addr, uint64_t rando, uint32_t *s
     memcpy(&(shim.hash), &rando, sizeof(uint64_t));
 
     shim.shim_ip = addr;
-
     *size = ntohs(ip->total_length);
     size_t packet_increase = 12;
     if (ip->protocol != AITF) {
-        packet_increase = 16;
+        packet_increase += 4;
     }
 
-
     struct _header_ip *new_ip = malloc(*size + packet_increase);
-
     unsigned char *header = (unsigned char *)new_ip;
     unsigned char *shimla = header + sizeof(struct _header_ip);
     unsigned char *datalo = shimla + sizeof(struct _shim_stack);
-
     size_t shimsize = sizeof(struct _shim_stack);
     size_t headsize = ip->IHL * 4; 
     size_t bodysize = *size - headsize;
@@ -82,33 +85,25 @@ uchar *insert_shim(uchar *orig, struct ip_addr addr, uint64_t rando, uint32_t *s
     memcpy(datalo, orig+headsize, bodysize); // copy in the body
     memcpy(shimla, &shim, shimsize); // copy the shimsize in too
     memcpy(header, orig, headsize); // copy the header in
-
     *size += packet_increase;
-
     new_ip->total_length = htons(*size); // write the size in
     if (ip->protocol != AITF) {
         new_ip->shim_size_opt = 1;
     } else {
         new_ip->shim_size_opt += 1;
     }
-
-
     if (new_ip->protocol != AITF) {
         new_ip->original_protocol = new_ip->protocol;
     }
 
-
     new_ip->protocol = AITF;
     new_ip->IHL = 6;
-
     recompute_checksum(header);
-
-
     return header;
 }
-
+// look at all these magic numbers!!
 uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8_t max, uint32_t *size) {
-    (void)max;
+    (void)max; 
 
     struct _header_ip *ip = (struct _header_ip *)data;
     *sl = ip->shim_size_opt;

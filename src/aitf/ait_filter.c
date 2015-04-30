@@ -15,7 +15,7 @@
 uint64_t salt;
 int debug_level = 0;
 dlist *ipmap;
-
+dlist *filter;
 
 void init_salt() {
     int file = open("/dev/urandom", O_RDONLY);
@@ -46,11 +46,40 @@ void toofuckingmuch(char *fail) {
 }
 
 
-void block_ip(struct ip_addr *ip) {
-    char buff[100] = {0};
-    sprintf(buff, "iptables -A INPUT -s %d.%d.%d.%d -j DROP",
-            ip->a, ip->b, ip->c, ip->d);
-    system(buff);
+void print_block_time_ips(struct ip_pair *pair) {
+    if (debug_level > 1) {
+        printf("Blocked traffic between:\n  ");
+        print_ip(pair->A);
+        printf("\n  ");
+        print_ip(pair->B);
+    }
+    printf("\nat time: %lu\n", aitf_milis());
+}
+
+
+void create_filter_rule(struct ip_addr A, struct ip_addr B) {
+    struct ip_pair *pair = malloc(sizeof(struct ip_pair));
+    memcpy(pair, &A, sizeof(struct ip_addr));
+    memcpy(&(pair->B), &B, sizeof(struct ip_addr));
+    dlist_add(filter, pair);
+    print_block_time_ips(pair);
+}
+
+#define I4 struct ip_addr
+bool ip_mixmatch(I4 X, I4 x, I4 Y, I4 y) {
+    int m = ip_cmp(&X, &x) && ip_cmp(&Y, &y);
+    int n = ip_cmp(&Y, &x) && ip_cmp(&X, &y);
+    return m||n;
+}
+
+bool matches_filter_rule(struct ip_addr A, struct ip_addr B) {
+    struct ip_pair *pair;
+    each(filter, pair) {
+        if (ip_mixmatch(pair->A, A, pair->B, B)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 
@@ -112,10 +141,10 @@ bool internal_packet(struct _header_ip *header) {
 }
 
 
-void calcMD5(uint64_t *hash, uint64_t *salt, uint64_t *ip) {
+void calcMD5(uint64_t *hash, uint64_t *salty, uint64_t *ip) {
     unsigned char input[16];
     unsigned char temp_result[16];
-    *((uint64_t *)input) = *salt;
+    *((uint64_t *)input) = *salty;
     *((uint64_t *)(input+8)) = *ip;
     MD5(input, 16, temp_result);
     *hash = *((uint64_t *) temp_result) ^ *((uint64_t *)(temp_result+8));
@@ -123,25 +152,25 @@ void calcMD5(uint64_t *hash, uint64_t *salt, uint64_t *ip) {
 
 //Calculates the hash using the MD% hashing function
 uint64_t hash(struct _header_ip *header) {
+    struct ip_addr IPs[2];
+    IPs[0] = header->source; // victim
+    IPs[1] = header->dest;   // attacker
+    
     uint64_t result;
-    calcMD5(&result, &salt, (uint64_t *)(&(header->source)));
+    calcMD5(&result, &salt, (uint64_t *)(IPs));
     return result;
 }
 
 bool validate(struct _header_ip *header, struct _shim_stack *shims) {
-    uint64_t current_hash; 
-    current_hash = *((uint64_t *)&(shims->hash));
-    struct ip_addr temp;
-    temp = header->source;
-    header->dest = temp;
-    bool result = (current_hash == hash(header));
-    temp = header->source;
-    header->dest = temp;
-    if (!result) {
-        printf("%lu is not the same as %lu\n", current_hash, hash(header));
-    }
+    struct ip_addr IPs[2];
+    IPs[0] = header->dest;   // attacker
+    IPs[1] = header->source; // victim
+    
+    uint64_t supplied_hash = *((uint64_t *)&(shims->hash));
+    uint64_t recalc_hash;
+    calcMD5(&recalc_hash, &salt, (uint64_t *)(IPs));
 
-    return result;
+    return recalc_hash == supplied_hash;
 }
 
 
@@ -152,7 +181,6 @@ struct ip_addr VIC = {.a=10, .b=4, .c=31, .d=4};
 bool is_route(struct ip_addr X, struct ip_addr Y) {
     int x = ip_cmp(&X, &ATK) && ip_cmp(&Y, &VIC);
     int y = ip_cmp(&Y, &ATK) && ip_cmp(&X, &VIC);
-
     return x||y;
 }
 
@@ -179,6 +207,11 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
 
 
     ip = (struct _header_ip *)original;
+
+    if (matches_filter_rule(ip->source, ip->dest)) {
+        toofuckingmuch("blocked packet!");
+        return -1;
+    }
 
     if (!internal_packet(ip)) {
         toofuckingmuch("the packet was not internal to the system\n");
@@ -225,6 +258,31 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
 
         // keep going!
         return true;
+    } else if(ip->protocol == PPM) {
+        light("recieved a PPM Packet!!!!!");
+        struct _shim_stack *shims;
+        uint8_t shimc;
+        
+        light("+=PPM PACKET========\n");
+        *wb = strip_shim(original, &shims, &shimc, 1, size);
+        alot("shims: \n");
+        printf("%i\n", shimc);
+        print_shims(shims, shimc);
+        if (shimc == 1) {
+            if (validate(ip, shims)) {
+                create_filter_rule(ip->dest, ip->source);
+            } else {
+                free(*wb);
+                return -1;
+            }
+        } else {
+            // what the shit just happened?
+        }
+        
+        light("+=PPM PAKCET========\n\n\n");
+        
+        return *wb != NULL;
+        //if we get a PPM packet from an attacker, we need to filter!!
     }
 #endif // CORE ROUTER
 #ifdef GATE
@@ -265,7 +323,9 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
         print_shims(shims, shimc);
         if (shimc == 1) {
             if (validate(ip, shims)) {
-                block_ip(&(ip->dest));    
+                create_filter_rule(ip->dest, ip->source);
+            } else {
+                puts("fuck");
             }
         }
         
@@ -294,7 +354,7 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
     if (debug_level > 1) {
         pretty_print_packet((struct _header_ip *)original);
     }
-    *wb = insert_shim(original, ATK, salt, size);
+    *wb = insert_shim(original, ATK, hash(ip), size);
     light("+=NORMAL PACKET=============\n\n");
     return *wb != NULL;
 }
@@ -337,6 +397,7 @@ void usage() {
 
 int main(int argc, char **argv) {
     ipmap = dlist_new();
+    filter = dlist_new();
     init_salt();
     
     int ctr = 0;
@@ -373,33 +434,28 @@ int main(int argc, char **argv) {
     int rv;
     char buf[4096] __attribute__ ((aligned));
 
-    printf("opening library handle\n");
     h = nfq_open();
     if (!h) {
         fprintf(stderr, "error during nfq_open()\n");
         exit(1);
     }
 
-    printf("unbinding existing nf_queue handler for AF_INET (if any)\n");
     if (nfq_unbind_pf(h, AF_INET) < 0) {
         fprintf(stderr, "error during nfq_unbind_pf()\n");
         exit(1);
     }
 
-    printf("binding nfnetlink_queue as nf_queue handler for AF_INET\n");
     if (nfq_bind_pf(h, AF_INET) < 0) {
         fprintf(stderr, "error during nfq_bind_pf()\n");
         exit(1);
     }
 
-    printf("binding this socket to queue '0'\n");
     qh = nfq_create_queue(h,  0, &cb, NULL);
     if (!qh) {
         fprintf(stderr, "error during nfq_create_queue()\n");
         exit(1);
     }
 
-    printf("setting copy_packet mode\n");
     if (nfq_set_mode(qh, NFQNL_COPY_PACKET, 0xffff) < 0) {
         fprintf(stderr, "can't set packet_copy mode\n");
         exit(1);
@@ -411,10 +467,8 @@ int main(int argc, char **argv) {
         nfq_handle_packet(h, buf, rv);
     }
 
-    printf("unbinding from queue 0\n");
     nfq_destroy_queue(qh);
 
-    printf("closing library handle\n");
     nfq_close(h);
 
     exit(0);

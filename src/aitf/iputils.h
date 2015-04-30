@@ -63,6 +63,11 @@ struct _tcp_payload {
     uint32_t size;
 };
 
+struct ip_pair {
+    struct ip_addr A;
+    struct ip_addr B;
+};
+
 struct ip_map {
     struct ip_addr address;
     struct _shim_stack *shims;
@@ -81,4 +86,5 @@ void fix_packet(struct _header_ip *h);
 void pretty_print_packet(struct _header_ip *ip);
 void print_bytes(struct _header_ip *header);
 uchar *create_ppm(struct _header_ip *orig, struct _shim_stack *shims, size_t shimc, uint32_t *size);
+uint64_t aitf_milis();
 #endif

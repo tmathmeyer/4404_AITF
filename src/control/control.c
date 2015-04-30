@@ -68,9 +68,11 @@ int main (void) {
     recompute_checksum(datagram);
 
 
+    printf("sent packet at: %lu\n\n", aitf_milis());
     if (sendto (s, datagram, ntohs(ip->total_length), 0, sinp, sizeof(sin)) < 0) {
         perror("oh shit, couldn't communicate with gateway");
     }
+
      
     return 0;
 }
