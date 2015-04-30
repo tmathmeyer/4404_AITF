@@ -8,13 +8,24 @@
 #include <linux/netfilter.h>
 #include <libnetfilter_queue/libnetfilter_queue.h>
 #include <openssl/md5.h>
+#include <fcntl.h>
 #include "iputils.h"
 #include "dlist.h"
 
-
+uint64_t salt;
 int debug_level = 0;
 dlist *ipmap;
 
+
+void init_salt() {
+    int file = open("/dev/urandom", O_RDONLY);
+    if (file < 0) {
+        salt = 42;
+        puts("fuck, cannot read /dev/urandom");
+    } else {
+        read(file, &salt, sizeof(uint64_t));
+    }
+}
 
 void light(char *fail) {
     if (debug_level > 0) {
@@ -35,7 +46,7 @@ void toofuckingmuch(char *fail) {
 }
 
 
-void blockIP(struct ip_addr *ip) {
+void block_ip(struct ip_addr *ip) {
     char buff[100] = {0};
     sprintf(buff, "iptables -A INPUT -s %d.%d.%d.%d -j DROP",
             ip->a, ip->b, ip->c, ip->d);
@@ -81,7 +92,7 @@ void print_shims(struct _shim_stack *shims, size_t shimc) {
     while(shimc) {
         shimc--;
         if (debug_level > 1) {
-            printf("  [%zd] -> %i :: ", shimc, shims[shimc].hash);
+            printf("  [%zd] -> %i %i :: ", shimc, shims[shimc].hash, shims[shimc].hash_extra);
             print_ip(shims[shimc].shim_ip);
             printf("\n");
         }
@@ -113,15 +124,24 @@ void calcMD5(uint64_t *hash, uint64_t *salt, uint64_t *ip) {
 //Calculates the hash using the MD% hashing function
 uint64_t hash(struct _header_ip *header) {
     uint64_t result;
-    uint64_t salt = 42;
     calcMD5(&result, &salt, (uint64_t *)(&(header->source)));
     return result;
 }
 
 bool validate(struct _header_ip *header, struct _shim_stack *shims) {
-    uint64_t currentHash; 
-    currentHash = *((uint64_t *)&(shims->hash));
-    return currentHash == hash(header);
+    uint64_t current_hash; 
+    current_hash = *((uint64_t *)&(shims->hash));
+    struct ip_addr temp;
+    temp = header->source;
+    header->dest = temp;
+    bool result = (current_hash == hash(header));
+    temp = header->source;
+    header->dest = temp;
+    if (!result) {
+        printf("%lu is not the same as %lu\n", current_hash, hash(header));
+    }
+
+    return result;
 }
 
 
@@ -209,27 +229,50 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
 #endif // CORE ROUTER
 #ifdef GATE
     if (ip->protocol == FILTER) {
+        size_t shimc;
+        struct _shim_stack *shims = get_shim_for_ip(ip->dest, &shimc);
+        
         alot("+=FILTER REQUEST=====\n");
         if (debug_level > 0) {
             print_ip(ip->source);
             printf(" is asking for protection from ");
             print_ip(ip->dest);
-            puts("\n");
-
-            size_t shimc;
-            struct _shim_stack *shims = get_shim_for_ip(ip->dest, &shimc);
+            
             if (shimc > 0) {
                 print_shims(shims, shimc);
             } else {
-                puts("there were no shims! :O nothing can be done!");
+                puts("\nthere were no shims! :O nothing can be done!");
             }
-
-            printf("\n");
         }
         alot("+FILTER REQUEST=====\n\n\n");
 
-        return -1;
+        if (shimc > 0) {
+            *wb = create_ppm(ip, shims, shimc, size);
+            return *wb != NULL;
+        } else {
+            return -1;
+        }
+
     } else if(ip->protocol == PPM) {
+        puts("recieved a PPM Packet!!!!!");
+        struct _shim_stack *shims;
+        uint8_t shimc;
+        
+        light("+=PPM PACKET========\n");
+        *wb = strip_shim(original, &shims, &shimc, ALL_SHIMS, size);
+        alot("shims: \n");
+        printf("%i\n", shimc);
+        print_shims(shims, shimc);
+        if (shimc == 1) {
+            if (validate(ip, shims)) {
+                block_ip(&(ip->dest));    
+            }
+        }
+        
+        free(*wb);
+        light("+=PPM PAKCET========\n\n\n");
+        
+        return -1;
         //if we get a PPM packet from an attacker, we need to filter!!
     } else if (ip->protocol == AITF) {
         // if we get an AITF packet as a gateway router, strip it
@@ -251,7 +294,7 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
     if (debug_level > 1) {
         pretty_print_packet((struct _header_ip *)original);
     }
-    *wb = insert_shim(original, ATK, 42, size);
+    *wb = insert_shim(original, ATK, salt, size);
     light("+=NORMAL PACKET=============\n\n");
     return *wb != NULL;
 }
@@ -294,7 +337,8 @@ void usage() {
 
 int main(int argc, char **argv) {
     ipmap = dlist_new();
-    dlist_add(ipmap, NULL);
+    init_salt();
+    
     int ctr = 0;
     while(++ctr < argc) {
         if (!(strncmp(argv[ctr], "-v", 2)&&strncmp(argv[ctr], "--verbose", 8))){

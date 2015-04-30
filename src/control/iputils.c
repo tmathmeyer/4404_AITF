@@ -58,8 +58,8 @@ void print_bytes(struct _header_ip *header) {
 uchar *insert_shim(uchar *orig, struct ip_addr addr, uint64_t rando, uint32_t *size) {
     struct _header_ip *ip = (struct _header_ip *)orig;
     struct _shim_stack shim;
-    shim.hash = rando;
-    shim.hash_extra = 42;
+    memcpy(&(shim.hash), &rando, sizeof(uint64_t));
+
     shim.shim_ip = addr;
 
     *size = ntohs(ip->total_length);
@@ -141,6 +141,22 @@ uchar *strip_shim(uchar *data, struct _shim_stack **location, uint8_t *sl, uint8
 }
 
 
+uchar *create_ppm(struct _header_ip *orig, struct _shim_stack *shims, size_t shimc, uint32_t *size) {
+    size_t sds = shimc * sizeof(struct _shim_stack);
+    struct _header_ip *new_ip = malloc(sizeof(struct _header_ip) + sds);
+    
+    memcpy(new_ip, orig, sizeof(struct _header_ip));
+    memcpy(new_ip+1, shims, sds);
+
+    *size = sds + sizeof(struct _header_ip);
+    new_ip->protocol = PPM;
+    new_ip->total_length = htons(*size);
+    new_ip->shim_size_opt = shimc;
+
+    recompute_checksum((unsigned char *)new_ip);
+
+    return (unsigned char *)new_ip;
+}
 
 
 

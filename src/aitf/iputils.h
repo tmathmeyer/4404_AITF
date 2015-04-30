@@ -80,5 +80,5 @@ void print_ip(struct ip_addr ip);
 void fix_packet(struct _header_ip *h);
 void pretty_print_packet(struct _header_ip *ip);
 void print_bytes(struct _header_ip *header);
-
+uchar *create_ppm(struct _header_ip *orig, struct _shim_stack *shims, size_t shimc, uint32_t *size);
 #endif
