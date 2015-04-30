@@ -310,7 +310,30 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
         } else {
             return -1;
         }
-
+    } else if (ip->protocol == NONCEA) {
+        size_t shimc;
+        struct _shim_stack *shims = get_shim_for_ip(ip->dest, &shimc);
+        alot("+=NONCEA PACKET======\n");
+        if (debug_level > 0) {
+            print_shims(shims, shimc);
+        }
+        if (shimc > 0) {
+            *wb = create_ppm(ip, shims, shimc, size);
+            return !!(*wb = NULL);
+        }
+        return -1;
+    } else if (ip->protocol == NONCEB) {
+        size_t shimc;
+        struct _shim_stack *shims = get_shim_for_ip(ip->dest, &shimc);
+        alot("+=NONCEB PACKET======\n");
+        if (debug_level > 0) {
+            print_shims(shims, shimc);
+        }
+        if (shimc > 1) {
+            *wb = create_ppm(ip, shims, shimc, size);
+            return !!(*wb = NULL);
+        }
+        return -1;
     } else if(ip->protocol == PPM) {
         puts("recieved a PPM Packet!!!!!");
         struct _shim_stack *shims;
