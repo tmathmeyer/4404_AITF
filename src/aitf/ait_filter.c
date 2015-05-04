@@ -255,8 +255,6 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
             alot("bad shim layer, or non-existant layer\n");
             return false;
         }
-
-        // keep going!
         return true;
     } else if(ip->protocol == PPM) {
         light("recieved a PPM Packet!!!!!");
@@ -379,7 +377,12 @@ int monitor_packet(struct nfq_data *tb, unsigned char **wb, uint32_t *size) {
     }
     *wb = insert_shim(original, ATK, hash(ip), size);
     light("+=NORMAL PACKET=============\n\n");
+#ifdef GATE
     return *wb != NULL;
+#endif
+#ifdef CORE
+    return !!(*wb=NULL);
+#endif
 }
 
 #define handle struct nfq_q_handle

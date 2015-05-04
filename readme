@@ -1,0 +1,5 @@
+to make the gateway program, cd into ./src/aitf/, and run "make OPT=GATE".
+to make the core program, cd into ./src/aitf/, and run "make OPT=CORE".
+to make the client program cd into ./src/control/, and run make.
+
+
